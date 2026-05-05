@@ -46,6 +46,7 @@ class ApplicationResponse(BaseModel):
     original_job_url: str
     canonical_job_url: Optional[str]
     match_score: Optional[float]
+    match_analysis_json: Optional[str] = None
     duplicate_status: Optional[str]
     cover_letter: Optional[str]
     screening_answers: Optional[str]
@@ -191,3 +192,32 @@ class CandidateAnswerResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class MatchAnalyzeRequest(BaseModel):
+    candidate_id: int
+    company_name: str
+    job_title: str
+    job_description: str
+
+
+class MatchAnalyzeResponse(BaseModel):
+    overall_score: int
+    recommendation: str
+    summary: str
+
+    required_skills_score: int
+    preferred_skills_score: int
+    industry_score: int
+    seniority_score: int
+    location_score: int
+
+    required_skills: List[str]
+    preferred_skills: List[str]
+    matched_skills: List[str]
+    missing_required_skills: List[str]
+    missing_preferred_skills: List[str]
+    risk_flags: List[str]
+    strengths: List[str]
+
+    reasoning: str
+

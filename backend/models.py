@@ -48,6 +48,7 @@ class Application(Base):
     job_description = Column(Text, nullable=False)
 
     match_score = Column(Float, nullable=True)
+    match_analysis_json = Column(Text, nullable=True)
     duplicate_status = Column(String, default="Not Checked")
 
     cover_letter = Column(Text, nullable=True)

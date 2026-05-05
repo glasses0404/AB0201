@@ -1,5 +1,6 @@
 import os
 import csv
+import json
 from io import StringIO
 from fastapi.responses import StreamingResponse
 
@@ -29,7 +30,9 @@ from schemas import (
     ScreeningAutofillResponse,
     CandidateAnswerCreate,
     CandidateAnswerUpdate,
-    CandidateAnswerResponse
+    CandidateAnswerResponse,
+    MatchAnalyzeRequest,
+    MatchAnalyzeResponse
 )
 
 from services.url_service import preserve_original_url, create_canonical_url
@@ -39,6 +42,7 @@ from services.cover_letter_service import generate_cover_letter
 from services.screening_service import generate_screening_answers
 from services.job_extract_service import extract_job_info_with_ai
 from services.job_page_detection_service import detect_job_page_with_ai
+from services.structured_match_service import analyze_structured_match
 from services.google_sheets_service import (
     sync_applications_to_sheet,
     sync_dashboard_to_sheet
@@ -225,12 +229,18 @@ def create_application(app_req: ApplicationCreate, db: Session = Depends(get_db)
         canonical_job_url=canonical_url
     )
 
-    match_score = calculate_match_score(
+    candidate_name = f"{candidate.first_name} {candidate.last_name}"
+
+    match_analysis = analyze_structured_match(
+        candidate_name=candidate_name,
         resume_text=candidate.resume_text or "",
+        company_name=app_req.company_name,
+        job_title=app_req.job_title,
         job_description=app_req.job_description
     )
 
-    candidate_name = f"{candidate.first_name} {candidate.last_name}"
+    match_score = float(match_analysis.get("overall_score", 0))
+    match_analysis_json = json.dumps(match_analysis)
 
     cover_letter = generate_cover_letter(
         candidate_name=candidate_name,
@@ -260,10 +270,14 @@ def create_application(app_req: ApplicationCreate, db: Session = Depends(get_db)
         questions=app_req.screening_questions or []
     )
 
+    recommendation = match_analysis.get("recommendation", "Needs Review")
+
     if duplicate_status == "Exact Duplicate":
         initial_status = "Duplicate"
-    elif match_score is not None and match_score < 60:
+    elif recommendation == "Skip":
         initial_status = "Skipped - Low Match"
+    elif recommendation == "Needs Review":
+        initial_status = "Needs Review"
     else:
         initial_status = "Draft Generated"
 
@@ -276,6 +290,7 @@ def create_application(app_req: ApplicationCreate, db: Session = Depends(get_db)
         application_url=original_url,
         job_description=app_req.job_description,
         match_score=match_score,
+        match_analysis_json=match_analysis_json,
         duplicate_status=duplicate_status,
         cover_letter=cover_letter,
         screening_answers=screening_answers,
@@ -289,6 +304,27 @@ def create_application(app_req: ApplicationCreate, db: Session = Depends(get_db)
 
     return new_application
 
+@app.post("/match/analyze", response_model=MatchAnalyzeResponse)
+def analyze_match(
+    req: MatchAnalyzeRequest,
+    db: Session = Depends(get_db)
+):
+    candidate = db.query(Candidate).filter(Candidate.id == req.candidate_id).first()
+
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    candidate_name = f"{candidate.first_name} {candidate.last_name}"
+
+    match_analysis = analyze_structured_match(
+        candidate_name=candidate_name,
+        resume_text=candidate.resume_text or "",
+        company_name=req.company_name,
+        job_title=req.job_title,
+        job_description=req.job_description
+    )
+
+    return match_analysis
 
 @app.get("/applications")
 def list_applications(
@@ -1094,8 +1130,6 @@ def generate_screening_autofill_answers(
         candidate_profile=candidate_profile,
         questions=questions
     )
-
-    import json
 
     try:
         parsed_answers = json.loads(raw_answers)

@@ -1179,6 +1179,16 @@ function displayApplicationDraft(result) {
     safeJsonPretty(result.screening_answers) ||
     "No screening answers generated.";
 
+  if (result.match_analysis_json) {
+    try {
+      const matchAnalysis = JSON.parse(result.match_analysis_json);
+
+      screeningAnswersOutput.innerText = `MATCH ANALYSIS\n${JSON.stringify(matchAnalysis, null, 2)}\n\nSCREENING ANSWERS\n${safeJsonPretty(result.screening_answers)}`;
+    } catch (error) {
+      // keep existing output if parsing fails
+    }
+  }
+
   updateManagerOverrideVisibility();
 }
 

@@ -603,6 +603,16 @@ async function runAutobidderPageAnalysis() {
       applicationPayload,
     );
 
+    let matchAnalysis = null;
+
+    try {
+      matchAnalysis = applicationDraft.match_analysis_json
+        ? JSON.parse(applicationDraft.match_analysis_json)
+        : null;
+    } catch (error) {
+      matchAnalysis = null;
+    }
+
     let screeningAnswerResult = { answers: [] };
 
     if (screeningFields.length > 0) {
@@ -623,17 +633,27 @@ async function runAutobidderPageAnalysis() {
     const screeningPreview = screeningAnswerResult.answers.length
       ? screeningAnswerResult.answers
           .map((item, index) => {
-            return `${index + 1}. ${item.question}\nAnswer: ${item.answer}\nConfidence: ${item.confidence}\nManual Review: ${item.manual_review_required ? "Yes" : "No"}`;
+            return `${index + 1}. ${item.question}
+Answer: ${item.answer}
+Confidence: ${item.confidence}
+Manual Review: ${item.manual_review_required ? "Yes" : "No"}`;
           })
           .join("\n\n")
       : "No screening questions detected.";
 
     const matchClass =
-      Number(applicationDraft.match_score) >= 75
+      Number(applicationDraft.match_score) >= 85
         ? "autobidder-good"
-        : Number(applicationDraft.match_score) >= 60
+        : Number(applicationDraft.match_score) >= 70
           ? "autobidder-warning"
           : "autobidder-danger";
+
+    const requiredSkills = matchAnalysis?.required_skills?.join(", ") || "-";
+    const matchedSkills = matchAnalysis?.matched_skills?.join(", ") || "-";
+    const missingRequired =
+      matchAnalysis?.missing_required_skills?.join(", ") || "-";
+    const riskFlags = matchAnalysis?.risk_flags?.join(", ") || "-";
+    const strengths = matchAnalysis?.strengths?.join(", ") || "-";
 
     resultBox.innerHTML = `
   <div>
@@ -642,9 +662,27 @@ async function runAutobidderPageAnalysis() {
     <strong>ATS:</strong> ${atsType}<br>
     <strong>Company:</strong> ${applicationDraft.company_name}<br>
     <strong>Job Title:</strong> ${applicationDraft.job_title}<br>
-    <strong>Match Score:</strong> <span class="${matchClass}">${applicationDraft.match_score}%</span><br>
+    <strong>Overall Match:</strong> <span class="${matchClass}">${applicationDraft.match_score}%</span><br>
+    <strong>Recommendation:</strong> ${matchAnalysis?.recommendation || "Needs Review"}<br>
     <strong>Duplicate:</strong> ${applicationDraft.duplicate_status}<br>
-    <strong>Status:</strong> ${applicationDraft.status}<br>
+    <strong>Status:</strong> ${applicationDraft.status}<br><br>
+
+    <strong>Match Breakdown</strong><br>
+    Required Skills Score: ${matchAnalysis?.required_skills_score ?? "-"}<br>
+    Preferred Skills Score: ${matchAnalysis?.preferred_skills_score ?? "-"}<br>
+    Industry Score: ${matchAnalysis?.industry_score ?? "-"}<br>
+    Seniority Score: ${matchAnalysis?.seniority_score ?? "-"}<br>
+    Location Score: ${matchAnalysis?.location_score ?? "-"}<br><br>
+
+    <strong>Required Skills:</strong> ${requiredSkills}<br>
+    <strong>Matched Skills:</strong> ${matchedSkills}<br>
+    <strong>Missing Required:</strong> ${missingRequired}<br>
+    <strong>Strengths:</strong> ${strengths}<br>
+    <strong>Risk Flags:</strong> ${riskFlags}<br><br>
+
+    <strong>Summary</strong><br>
+    <pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">${matchAnalysis?.summary || "No summary available."}</pre>
+
     <strong>Screening Questions:</strong> ${screeningFields.length}<br><br>
 
     <strong>Screening Answers</strong><br>
