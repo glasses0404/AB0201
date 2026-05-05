@@ -914,6 +914,7 @@ def generate_screening_autofill_answers(
 
         answers.append({
             "fieldId": field.fieldId,
+            "fieldType": field.fieldType,
             "question": field.label,
             "answer": answer_item.get("answer", ""),
             "confidence": answer_item.get("confidence", "Low"),

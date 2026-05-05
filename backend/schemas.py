@@ -153,6 +153,7 @@ class ScreeningAutofillRequest(BaseModel):
 
 class ScreeningAutofillAnswer(BaseModel):
     fieldId: str
+    fieldType: Optional[str] = None
     question: str
     answer: str
     confidence: str
@@ -161,3 +162,4 @@ class ScreeningAutofillAnswer(BaseModel):
 
 class ScreeningAutofillResponse(BaseModel):
     answers: List[ScreeningAutofillAnswer]
+

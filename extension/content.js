@@ -269,6 +269,71 @@ function setNativeValue(element, value) {
   element.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+function clickMatchingRadio(fieldId, answerText) {
+  const radios = Array.from(
+    document.querySelectorAll(
+      `input[type="radio"][data-autobidder-field-id="${fieldId}"]`,
+    ),
+  );
+
+  if (!radios.length) {
+    return false;
+  }
+
+  const normalizedAnswer = String(answerText || "")
+    .toLowerCase()
+    .trim();
+
+  for (const radio of radios) {
+    const label = findLabelText(radio).toLowerCase();
+    const value = String(radio.value || "").toLowerCase();
+
+    const isMatch =
+      label === normalizedAnswer ||
+      value === normalizedAnswer ||
+      label.includes(normalizedAnswer) ||
+      normalizedAnswer.includes(label) ||
+      (normalizedAnswer.startsWith("yes") &&
+        (label.includes("yes") || value === "yes")) ||
+      (normalizedAnswer.startsWith("no") &&
+        (label.includes("no") || value === "no"));
+
+    if (isMatch) {
+      radio.click();
+      radio.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function setMatchingCheckbox(fieldId, answerText) {
+  const checkbox = document.querySelector(
+    `input[type="checkbox"][data-autobidder-field-id="${fieldId}"]`,
+  );
+
+  if (!checkbox) {
+    return false;
+  }
+
+  const answer = String(answerText || "").toLowerCase();
+
+  const shouldCheck =
+    answer.includes("yes") ||
+    answer.includes("agree") ||
+    answer.includes("true") ||
+    answer.includes("checked") ||
+    answer.includes("i consent") ||
+    answer.includes("i acknowledge");
+
+  checkbox.checked = shouldCheck;
+  checkbox.dispatchEvent(new Event("input", { bubbles: true }));
+  checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+
+  return true;
+}
+
 function fillScreeningAnswers(answers) {
   const filled = [];
   const skipped = [];
@@ -291,6 +356,36 @@ function fillScreeningAnswers(answers) {
         fieldId: answer.fieldId,
         reason: "Field not found",
       });
+      return;
+    }
+
+    if (field?.type === "radio" || answer.fieldType === "radio") {
+      const clicked = clickMatchingRadio(answer.fieldId, answer.answer);
+
+      if (clicked) {
+        filled.push(answer.fieldId);
+      } else {
+        skipped.push({
+          fieldId: answer.fieldId,
+          reason: "No matching radio option",
+        });
+      }
+
+      return;
+    }
+
+    if (field?.type === "checkbox" || answer.fieldType === "checkbox") {
+      const checked = setMatchingCheckbox(answer.fieldId, answer.answer);
+
+      if (checked) {
+        filled.push(answer.fieldId);
+      } else {
+        skipped.push({
+          fieldId: answer.fieldId,
+          reason: "Checkbox field not found",
+        });
+      }
+
       return;
     }
 
@@ -491,17 +586,7 @@ async function runAutobidderPageAnalysis() {
 
     const atsType = getAtsType();
 
-    let screeningFields = [];
-
-    if (atsType === "greenhouse") {
-      screeningFields = detectGreenhouseScreeningFields();
-    } else if (atsType === "lever") {
-      screeningFields = detectLeverScreeningFields();
-    } else if (atsType === "ashby") {
-      screeningFields = detectAshbyScreeningFields();
-    } else {
-      screeningFields = detectScreeningFields();
-    }
+    const screeningFields = detectAllScreeningFieldsForAts(atsType);
 
     const applicationPayload = {
       candidate_id: Number(active.candidateId),
@@ -587,6 +672,24 @@ async function getSavedResumeFileForCandidateFromStorage(candidateId) {
       resolve(result[key] || null);
     });
   });
+}
+
+function detectAllScreeningFieldsForAts(atsType) {
+  let fields = [];
+
+  if (atsType === "greenhouse") {
+    fields = detectGreenhouseScreeningFields();
+  } else if (atsType === "lever") {
+    fields = detectLeverScreeningFields();
+  } else if (atsType === "ashby") {
+    fields = detectAshbyScreeningFields();
+  } else {
+    fields = detectScreeningFields();
+  }
+
+  const choiceFields = detectChoiceFields();
+
+  return [...fields, ...choiceFields];
 }
 
 function detectLeverScreeningFields() {
@@ -704,6 +807,86 @@ function detectAshbyScreeningFields() {
       inputType: input.getAttribute("type") || "",
       label: labelText,
       options,
+    });
+  });
+
+  return fields;
+}
+
+function detectChoiceFields() {
+  const fields = [];
+
+  const radioGroups = {};
+  const radioInputs = Array.from(
+    document.querySelectorAll('input[type="radio"]'),
+  );
+
+  radioInputs.forEach((input, index) => {
+    const name = input.name || `radio-group-${index}`;
+
+    if (!radioGroups[name]) {
+      radioGroups[name] = [];
+    }
+
+    radioGroups[name].push(input);
+  });
+
+  Object.entries(radioGroups).forEach(([groupName, inputs], index) => {
+    const firstInput = inputs[0];
+    const container =
+      firstInput.closest("fieldset, div, section, li") ||
+      firstInput.parentElement;
+
+    const labelText = container
+      ? container.innerText.replace(/\s+/g, " ").trim()
+      : findLabelText(firstInput);
+
+    if (!labelText || labelText.length < 5) return;
+
+    const fieldId = `radio-field-${index}`;
+
+    inputs.forEach((input) => {
+      input.setAttribute("data-autobidder-field-id", fieldId);
+    });
+
+    const options = inputs.map((input) => {
+      const optionLabel = findLabelText(input) || input.value || "";
+      return {
+        value: input.value,
+        label: optionLabel.replace(/\s+/g, " ").trim(),
+      };
+    });
+
+    fields.push({
+      fieldId,
+      fieldType: "radio",
+      inputType: "radio",
+      label: labelText,
+      options,
+    });
+  });
+
+  const checkboxes = Array.from(
+    document.querySelectorAll('input[type="checkbox"]'),
+  );
+
+  checkboxes.forEach((input, index) => {
+    const labelText =
+      findLabelText(input) ||
+      input.closest("label, div, section")?.innerText ||
+      "";
+
+    if (!labelText || labelText.length < 5) return;
+
+    const fieldId = `checkbox-field-${index}`;
+    input.setAttribute("data-autobidder-field-id", fieldId);
+
+    fields.push({
+      fieldId,
+      fieldType: "checkbox",
+      inputType: "checkbox",
+      label: labelText.replace(/\s+/g, " ").trim(),
+      options: ["Checked", "Unchecked"],
     });
   });
 
