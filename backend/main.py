@@ -20,7 +20,13 @@ from schemas import (
     ApplicationStatusUpdate,
     ApplicationStatusOverrideUpdate,
     GoogleSheetsSyncLogResponse,
-    SlackReportLogResponse
+    SlackReportLogResponse,
+    JobPageDetectRequest,
+    JobPageDetectResponse,
+    ScreeningField,
+    ScreeningAutofillRequest,
+    ScreeningAutofillAnswer,
+    ScreeningAutofillResponse
 )
 
 from services.url_service import preserve_original_url, create_canonical_url
@@ -29,6 +35,7 @@ from services.match_service import calculate_match_score
 from services.cover_letter_service import generate_cover_letter
 from services.screening_service import generate_screening_answers
 from services.job_extract_service import extract_job_info_with_ai
+from services.job_page_detection_service import detect_job_page_with_ai
 from services.google_sheets_service import (
     sync_applications_to_sheet,
     sync_dashboard_to_sheet
@@ -55,7 +62,7 @@ def home():
     return {
         "message": "Autobidder MVP API is running"
     }
-    
+
 @app.get("/health")
 def health_check():
     return {
@@ -844,3 +851,75 @@ def list_slack_report_logs(
     ).limit(limit).all()
 
     return logs
+
+@app.post("/detect-job-page", response_model=JobPageDetectResponse)
+def detect_job_page(req: JobPageDetectRequest):
+    result = detect_job_page_with_ai(
+        url=req.url,
+        page_title=req.page_title,
+        page_text=req.page_text
+    )
+
+    return {
+        "is_job_posting": result.get("is_job_posting", False),
+        "confidence": result.get("confidence", "Low"),
+        "company_name": result.get("company_name"),
+        "job_title": result.get("job_title"),
+        "reason": result.get("reason")
+    }
+
+@app.post("/screening/autofill-answers", response_model=ScreeningAutofillResponse)
+def generate_screening_autofill_answers(
+    req: ScreeningAutofillRequest,
+    db: Session = Depends(get_db)
+):
+    candidate = db.query(Candidate).filter(Candidate.id == req.candidate_id).first()
+
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    questions = [field.label for field in req.fields]
+
+    candidate_profile = {
+        "first_name": candidate.first_name,
+        "last_name": candidate.last_name,
+        "email": candidate.email,
+        "phone": candidate.phone,
+        "location": candidate.location,
+        "linkedin": candidate.linkedin,
+        "github": candidate.github,
+        "portfolio": candidate.portfolio,
+        "work_authorization": candidate.work_authorization,
+        "sponsorship_required": candidate.sponsorship_required,
+        "expected_salary": candidate.expected_salary,
+    }
+
+    raw_answers = generate_screening_answers(
+        resume_text=candidate.resume_text or "",
+        candidate_profile=candidate_profile,
+        questions=questions
+    )
+
+    import json
+
+    try:
+        parsed_answers = json.loads(raw_answers)
+    except Exception:
+        parsed_answers = []
+
+    answers = []
+
+    for index, field in enumerate(req.fields):
+        answer_item = parsed_answers[index] if index < len(parsed_answers) else {}
+
+        answers.append({
+            "fieldId": field.fieldId,
+            "question": field.label,
+            "answer": answer_item.get("answer", ""),
+            "confidence": answer_item.get("confidence", "Low"),
+            "manual_review_required": answer_item.get("manual_review_required", True)
+        })
+
+    return {
+        "answers": answers
+    }

@@ -248,6 +248,24 @@ async function syncApplicationsToGoogleSheets(filters = {}) {
   return await response.json();
 }
 
+function saveActiveCandidateAndBidder() {
+  const candidateId = getSelectedCandidateId();
+  const bidderName = getSelectedBidderName();
+
+  chrome.storage.local.set(
+    {
+      activeCandidateId: candidateId,
+      activeBidderName: bidderName,
+    },
+    () => {
+      console.log("Saved active candidate/bidder:", {
+        activeCandidateId: candidateId,
+        activeBidderName: bidderName,
+      });
+    },
+  );
+}
+
 async function getRecentApplications(filters = {}) {
   const params = new URLSearchParams();
 
@@ -366,6 +384,55 @@ function renderRecentApplications(applications) {
       }
     });
   });
+}
+
+async function uploadSavedResumeForSelectedCandidateToPage() {
+  const candidateId = getSelectedCandidateId();
+
+  if (!candidateId) {
+    return {
+      success: false,
+      message: "No candidate selected for resume upload.",
+    };
+  }
+
+  const resumeData = await getSavedResumeFileForCandidate(candidateId);
+
+  if (!resumeData) {
+    return {
+      success: false,
+      message: "No saved resume found for this candidate.",
+    };
+  }
+
+  const tab = await getActiveTab();
+
+  if (!tab || !tab.id) {
+    return {
+      success: false,
+      message: "No active tab found.",
+    };
+  }
+
+  if (
+    tab.url.startsWith("chrome://") ||
+    tab.url.startsWith("chrome-extension://") ||
+    tab.url.startsWith("edge://")
+  ) {
+    return {
+      success: false,
+      message: "Open the actual job application page, then try again.",
+    };
+  }
+
+  await ensureContentScript(tab.id);
+
+  const response = await chrome.tabs.sendMessage(tab.id, {
+    type: "UPLOAD_RESUME_FILE",
+    resumeData,
+  });
+
+  return response;
 }
 
 async function ensureContentScript(tabId) {
@@ -908,6 +975,8 @@ function renderCandidateOptions(candidates) {
   if (candidates.length === 1) {
     candidateSelect.value = candidates[0].id;
     updateCandidatePreview();
+    loadSavedResumePreview();
+    saveActiveCandidateAndBidder();
   }
 }
 
@@ -1520,10 +1589,12 @@ bidderNameSelect.addEventListener("change", () => {
   }
 
   saveBidderName();
+  saveActiveCandidateAndBidder();
 });
 
 customBidderNameInput.addEventListener("input", () => {
   saveBidderName();
+  saveActiveCandidateAndBidder();
 });
 
 dailyReportBtn.addEventListener("click", async () => {
@@ -1654,6 +1725,7 @@ candidateSearchInput.addEventListener("input", () => {
 candidateSelect.addEventListener("change", async () => {
   updateCandidatePreview();
   await loadSavedResumePreview();
+  saveActiveCandidateAndBidder();
 });
 
 toggleCreateCandidateBtn.addEventListener("click", () => {
@@ -1690,6 +1762,7 @@ createCandidateBtn.addEventListener("click", async () => {
     updateCandidatePreview();
 
     await loadSavedResumePreview();
+    saveActiveCandidateAndBidder();
 
     clearCreateCandidateForm();
 
@@ -1815,12 +1888,42 @@ autofillBtn.addEventListener("click", async () => {
 
     const tab = await getActiveTab();
 
-    const response = await chrome.tabs.sendMessage(tab.id, {
+    if (!tab || !tab.id) {
+      setStatus("No active tab found.", "error");
+      return;
+    }
+
+    if (
+      tab.url.startsWith("chrome://") ||
+      tab.url.startsWith("chrome-extension://") ||
+      tab.url.startsWith("edge://")
+    ) {
+      setStatus(
+        "Open the actual job application page, then try again.",
+        "error",
+      );
+      return;
+    }
+
+    await ensureContentScript(tab.id);
+
+    const autofillResponse = await chrome.tabs.sendMessage(tab.id, {
       type: "AUTOFILL_BASIC_FIELDS",
       profile: latestCandidateProfile,
     });
 
-    setStatus(response.message, "success");
+    let finalMessage = autofillResponse?.message || "Basic fields autofilled.";
+
+    const resumeUploadResponse =
+      await uploadSavedResumeForSelectedCandidateToPage();
+
+    if (resumeUploadResponse && resumeUploadResponse.success) {
+      finalMessage += ` Resume uploaded: ${resumeUploadResponse.message}`;
+    } else {
+      finalMessage += ` Resume not uploaded: ${resumeUploadResponse?.message || "No saved resume found."}`;
+    }
+
+    setStatus(finalMessage, "success");
   } catch (error) {
     console.error(error);
     setStatus("Autofill error: " + error.message, "error");

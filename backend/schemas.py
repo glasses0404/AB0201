@@ -124,3 +124,40 @@ class SlackReportLogResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class JobPageDetectRequest(BaseModel):
+    url: str
+    page_title: str
+    page_text: str
+
+
+class JobPageDetectResponse(BaseModel):
+    is_job_posting: bool
+    confidence: str
+    company_name: Optional[str] = None
+    job_title: Optional[str] = None
+    reason: Optional[str] = None
+
+class ScreeningField(BaseModel):
+    fieldId: str
+    fieldType: str
+    inputType: Optional[str] = None
+    label: str
+    options: Optional[List[str]] = []
+
+
+class ScreeningAutofillRequest(BaseModel):
+    candidate_id: int
+    fields: List[ScreeningField]
+
+
+class ScreeningAutofillAnswer(BaseModel):
+    fieldId: str
+    question: str
+    answer: str
+    confidence: str
+    manual_review_required: bool
+
+
+class ScreeningAutofillResponse(BaseModel):
+    answers: List[ScreeningAutofillAnswer]

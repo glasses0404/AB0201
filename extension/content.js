@@ -1,3 +1,484 @@
+const AUTOBIDDER_API_BASE_URL = "http://127.0.0.1:8000";
+
+let autobidderDetectedJobPage = null;
+let autobidderFloatingPanel = null;
+
+function createAutobidderFloatingPanel() {
+  if (document.getElementById("autobidder-floating-panel")) {
+    return;
+  }
+
+  const panel = document.createElement("div");
+  panel.id = "autobidder-floating-panel";
+
+  panel.innerHTML = `
+    <div id="autobidder-panel-header">
+      <strong>Autobidder</strong>
+      <button id="autobidder-close-btn">×</button>
+    </div>
+
+    <div id="autobidder-panel-body">
+      <div id="autobidder-job-info">Detecting job page...</div>
+
+      <button id="autobidder-run-analysis-btn">Analyze Job</button>
+      <button id="autobidder-autofill-btn">Autofill</button>
+
+      <div id="autobidder-result-box"></div>
+    </div>
+  `;
+
+  const style = document.createElement("style");
+  style.innerHTML = `
+    #autobidder-floating-panel {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      width: 360px;
+      max-height: 620px;
+      overflow-y: auto;
+      background: #ffffff;
+      color: #111827;
+      border: 1px solid #d1d5db;
+      border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      z-index: 2147483647;
+      font-family: Arial, sans-serif;
+      font-size: 13px;
+    }
+
+    #autobidder-panel-header {
+      background: #111827;
+      color: white;
+      padding: 10px 12px;
+      border-radius: 14px 14px 0 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    #autobidder-close-btn {
+      background: transparent;
+      color: white;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    #autobidder-panel-body {
+      padding: 12px;
+    }
+
+    #autobidder-panel-body button {
+      width: 100%;
+      margin-top: 8px;
+      padding: 9px;
+      border: none;
+      border-radius: 8px;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    #autobidder-panel-body button:hover {
+      background: #1d4ed8;
+    }
+
+    #autobidder-job-info {
+      background: #f3f4f6;
+      border: 1px solid #e5e7eb;
+      padding: 8px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+
+    #autobidder-result-box {
+      margin-top: 10px;
+      white-space: pre-wrap;
+      font-size: 12px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      padding: 8px;
+      border-radius: 8px;
+      max-height: 360px;
+      overflow-y: auto;
+    }
+
+    .autobidder-good {
+      color: #166534;
+      font-weight: bold;
+    }
+
+    .autobidder-warning {
+      color: #92400e;
+      font-weight: bold;
+    }
+
+    .autobidder-danger {
+      color: #991b1b;
+      font-weight: bold;
+    }
+  `;
+
+  document.documentElement.appendChild(style);
+  document.body.appendChild(panel);
+
+  autobidderFloatingPanel = panel;
+
+  document
+    .getElementById("autobidder-close-btn")
+    .addEventListener("click", () => {
+      panel.remove();
+    });
+
+  document
+    .getElementById("autobidder-run-analysis-btn")
+    .addEventListener("click", async () => {
+      await runAutobidderPageAnalysis();
+    });
+
+  document
+    .getElementById("autobidder-autofill-btn")
+    .addEventListener("click", async () => {
+      await runAutobidderAutofillFromPanel();
+    });
+}
+
+function getFieldLabel(input) {
+  let labelText = "";
+
+  if (input.id) {
+    const label = document.querySelector(`label[for="${input.id}"]`);
+    if (label) labelText += " " + label.innerText;
+  }
+
+  const parentLabel = input.closest("label");
+  if (parentLabel) labelText += " " + parentLabel.innerText;
+
+  const ariaLabel = input.getAttribute("aria-label");
+  if (ariaLabel) labelText += " " + ariaLabel;
+
+  const placeholder = input.getAttribute("placeholder");
+  if (placeholder) labelText += " " + placeholder;
+
+  const name = input.getAttribute("name");
+  if (name) labelText += " " + name;
+
+  const nearbyText = input.closest("div, section, fieldset")?.innerText || "";
+  if (nearbyText && nearbyText.length < 500) {
+    labelText += " " + nearbyText;
+  }
+
+  return labelText.replace(/\s+/g, " ").trim();
+}
+
+function detectScreeningFields() {
+  const fields = [];
+
+  const elements = Array.from(
+    document.querySelectorAll(
+      "textarea, input[type='text'], input[type='number'], select",
+    ),
+  );
+
+  elements.forEach((el, index) => {
+    const label = getFieldLabel(el);
+
+    if (!label || label.length < 5) return;
+
+    const lower = label.toLowerCase();
+
+    const looksLikeScreening =
+      lower.includes("?") ||
+      lower.includes("authorized") ||
+      lower.includes("sponsorship") ||
+      lower.includes("experience") ||
+      lower.includes("years") ||
+      lower.includes("salary") ||
+      lower.includes("relocate") ||
+      lower.includes("remote") ||
+      lower.includes("why") ||
+      lower.includes("describe") ||
+      lower.includes("explain");
+
+    if (!looksLikeScreening) return;
+
+    const fieldId = `autobidder-field-${index}`;
+    el.setAttribute("data-autobidder-field-id", fieldId);
+
+    let options = [];
+
+    if (el.tagName.toLowerCase() === "select") {
+      options = Array.from(el.options)
+        .map((option) => option.textContent.trim())
+        .filter(Boolean);
+    }
+
+    fields.push({
+      fieldId,
+      fieldType: el.tagName.toLowerCase(),
+      inputType: el.getAttribute("type") || "",
+      label,
+      options,
+    });
+  });
+
+  return fields;
+}
+
+function setNativeValue(element, value) {
+  const valueSetter = Object.getOwnPropertyDescriptor(element, "value")?.set;
+  const prototype = Object.getPrototypeOf(element);
+  const prototypeValueSetter = Object.getOwnPropertyDescriptor(
+    prototype,
+    "value",
+  )?.set;
+
+  if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {
+    prototypeValueSetter.call(element, value);
+  } else if (valueSetter) {
+    valueSetter.call(element, value);
+  } else {
+    element.value = value;
+  }
+
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function fillScreeningAnswers(answers) {
+  const filled = [];
+  const skipped = [];
+
+  answers.forEach((answer) => {
+    if (answer.manual_review_required) {
+      skipped.push({
+        fieldId: answer.fieldId,
+        reason: "Manual review required",
+      });
+      return;
+    }
+
+    const field = document.querySelector(
+      `[data-autobidder-field-id="${answer.fieldId}"]`,
+    );
+
+    if (!field) {
+      skipped.push({
+        fieldId: answer.fieldId,
+        reason: "Field not found",
+      });
+      return;
+    }
+
+    const tag = field.tagName.toLowerCase();
+
+    if (tag === "textarea" || tag === "input") {
+      setNativeValue(field, answer.answer);
+      filled.push(answer.fieldId);
+      return;
+    }
+
+    if (tag === "select") {
+      const options = Array.from(field.options);
+      const target = answer.answer.toLowerCase();
+
+      const matchingOption = options.find(
+        (option) =>
+          option.textContent.trim().toLowerCase() === target ||
+          option.value.trim().toLowerCase() === target ||
+          target.includes(option.textContent.trim().toLowerCase()),
+      );
+
+      if (matchingOption) {
+        field.value = matchingOption.value;
+        field.dispatchEvent(new Event("change", { bubbles: true }));
+        filled.push(answer.fieldId);
+      } else {
+        skipped.push({
+          fieldId: answer.fieldId,
+          reason: "No matching select option",
+        });
+      }
+    }
+  });
+
+  return {
+    success: true,
+    filled,
+    skipped,
+  };
+}
+
+async function getActiveCandidateFromStorage() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(
+      ["activeCandidateId", "activeBidderName"],
+      (result) => {
+        resolve({
+          candidateId: result.activeCandidateId,
+          bidderName: result.activeBidderName,
+        });
+      },
+    );
+  });
+}
+
+async function postJson(url, payload) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
+
+  return await response.json();
+}
+
+async function runAutobidderPageAnalysis() {
+  const resultBox = document.getElementById("autobidder-result-box");
+  const jobInfoBox = document.getElementById("autobidder-job-info");
+
+  try {
+    resultBox.innerText = "Analyzing job page...";
+
+    const pageData = {
+      url: window.location.href,
+      page_title: document.title,
+      page_text: getVisiblePageText(),
+    };
+
+    const active = await getActiveCandidateFromStorage();
+
+    if (!active.candidateId) {
+      resultBox.innerText =
+        "Please open the extension popup and select an active candidate first.";
+      return;
+    }
+
+    const detection = await postJson(
+      `${AUTOBIDDER_API_BASE_URL}/detect-job-page`,
+      pageData,
+    );
+
+    if (!detection.is_job_posting) {
+      resultBox.innerText = `This page does not look like a job posting.\nReason: ${detection.reason}`;
+      return;
+    }
+
+    jobInfoBox.innerHTML = `
+      <strong>Job Detected</strong><br>
+      Company: ${detection.company_name || "Unknown"}<br>
+      Title: ${detection.job_title || "Unknown"}<br>
+      Confidence: ${detection.confidence}
+    `;
+
+    const screeningFields = detectScreeningFields();
+
+    const applicationPayload = {
+      candidate_id: Number(active.candidateId),
+      company_name: detection.company_name || "Unknown Company",
+      job_title: detection.job_title || "Unknown Job",
+      original_job_url: window.location.href,
+      job_description: getVisiblePageText(),
+      screening_questions: screeningFields.map((field) => field.label),
+      created_by: active.bidderName || "On-page Assistant",
+    };
+
+    const applicationDraft = await postJson(
+      `${AUTOBIDDER_API_BASE_URL}/applications`,
+      applicationPayload,
+    );
+
+    let screeningAnswerResult = { answers: [] };
+
+    if (screeningFields.length > 0) {
+      screeningAnswerResult = await postJson(
+        `${AUTOBIDDER_API_BASE_URL}/screening/autofill-answers`,
+        {
+          candidate_id: Number(active.candidateId),
+          fields: screeningFields,
+        },
+      );
+    }
+
+    chrome.storage.local.set({
+      latestOnPageApplicationDraft: applicationDraft,
+      latestOnPageScreeningAnswers: screeningAnswerResult.answers,
+    });
+
+    resultBox.innerText = `
+Application Draft Created
+
+Company: ${applicationDraft.company_name}
+Job Title: ${applicationDraft.job_title}
+Match Score: ${applicationDraft.match_score}%
+Duplicate: ${applicationDraft.duplicate_status}
+Status: ${applicationDraft.status}
+
+Screening Questions Detected: ${screeningFields.length}
+
+Cover Letter:
+${applicationDraft.cover_letter || "No cover letter generated."}
+`.trim();
+  } catch (error) {
+    console.error(error);
+    resultBox.innerText = "Autobidder analysis error: " + error.message;
+  }
+}
+
+async function runAutobidderAutofillFromPanel() {
+  const resultBox = document.getElementById("autobidder-result-box");
+
+  try {
+    resultBox.innerText = "Running autofill...";
+
+    const active = await getActiveCandidateFromStorage();
+
+    if (!active.candidateId) {
+      resultBox.innerText =
+        "Please select an active candidate in the extension popup first.";
+      return;
+    }
+
+    const candidate = await fetch(
+      `${AUTOBIDDER_API_BASE_URL}/candidates/${active.candidateId}`,
+    ).then((r) => r.json());
+
+    autofillBasicFields(candidate);
+
+    const storageData = await new Promise((resolve) => {
+      chrome.storage.local.get(["latestOnPageScreeningAnswers"], resolve);
+    });
+
+    const answers = storageData.latestOnPageScreeningAnswers || [];
+
+    if (answers.length > 0) {
+      fillScreeningAnswers(answers);
+    }
+
+    resultBox.innerText = `
+Autofill completed.
+
+Filled:
+- Basic profile fields
+- Screening answers where confidence was high
+
+Please review all fields before submitting.
+`.trim();
+  } catch (error) {
+    console.error(error);
+    resultBox.innerText = "Autofill error: " + error.message;
+  }
+}
+
 function getVisiblePageText() {
   const bodyText = document.body ? document.body.innerText : "";
   return bodyText.replace(/\s+/g, " ").trim().slice(0, 12000);
@@ -354,6 +835,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return false;
     }
 
+    if (request.type === "DETECT_SCREENING_FIELDS") {
+      const fields = detectScreeningFields();
+
+      sendResponse({
+        success: true,
+        fields,
+      });
+
+      return false;
+    }
+
+    if (request.type === "FILL_SCREENING_ANSWERS") {
+      const result = fillScreeningAnswers(request.answers || []);
+
+      sendResponse(result);
+
+      return false;
+    }
+
     if (request.type === "UPLOAD_RESUME_FILE") {
       const result = uploadResumeFileToPage(request.resumeData);
 
@@ -379,3 +879,63 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return false;
   }
 });
+
+async function autoDetectAndShowAutobidderPanel() {
+  try {
+    const pageText = getVisiblePageText();
+
+    if (!pageText || pageText.length < 300) {
+      return;
+    }
+
+    const quickSignals = [
+      "apply",
+      "responsibilities",
+      "qualifications",
+      "requirements",
+      "job description",
+      "employment",
+      "salary",
+      "benefits",
+    ];
+
+    const lowerText = pageText.toLowerCase();
+
+    const hasQuickSignal = quickSignals.some((signal) =>
+      lowerText.includes(signal),
+    );
+
+    if (!hasQuickSignal) {
+      return;
+    }
+
+    const detection = await postJson(
+      `${AUTOBIDDER_API_BASE_URL}/detect-job-page`,
+      {
+        url: window.location.href,
+        page_title: document.title,
+        page_text: pageText,
+      },
+    );
+
+    if (detection.is_job_posting && detection.confidence !== "Low") {
+      autobidderDetectedJobPage = detection;
+      createAutobidderFloatingPanel();
+
+      const jobInfoBox = document.getElementById("autobidder-job-info");
+
+      jobInfoBox.innerHTML = `
+        <strong>Job Posting Detected</strong><br>
+        Company: ${detection.company_name || "Unknown"}<br>
+        Title: ${detection.job_title || "Unknown"}<br>
+        Confidence: ${detection.confidence}
+      `;
+    }
+  } catch (error) {
+    console.warn("Autobidder auto-detection skipped:", error);
+  }
+}
+
+setTimeout(() => {
+  autoDetectAndShowAutobidderPanel();
+}, 1800);
