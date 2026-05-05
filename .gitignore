@@ -1,3 +1,69 @@
+# Environment variables / secrets
 .env
-**/.env
-backend/.env
+.env.*
+!.env.example
+
+# OpenAI / API keys
+*api_key*
+*secret*
+*token*
+
+# SQLite database files
+*.db
+*.sqlite
+*.sqlite3
+autobidder.db
+backend/autobidder.db
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+.venv/
+ENV/
+
+# Python build files
+build/
+dist/
+*.egg-info/
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE/editor files
+.vscode/
+.idea/
+
+# Node / extension future files
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Chrome extension temporary/build files
+extension/dist/
+extension/build/
+extension/*.zip
+
+# Uploaded resumes / generated documents
+backend/storage/
+backend/uploads/
+backend/generated_cover_letters/
+storage/
+uploads/
+
+# Test/cache folders
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
