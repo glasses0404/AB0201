@@ -67,3 +67,7 @@ uploads/
 .ruff_cache/
 .coverage
 htmlcov/
+
+google_service_account.json
+backend/google_service_account.json
+*service_account*.json

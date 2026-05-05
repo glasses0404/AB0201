@@ -60,6 +60,7 @@ const dailyReportBtn = document.getElementById("dailyReportBtn");
 const dailyReportBox = document.getElementById("dailyReportBox");
 const dailyReportOutput = document.getElementById("dailyReportOutput");
 const exportDailyCsvBtn = document.getElementById("exportDailyCsvBtn");
+const exportFilteredCsvBtn = document.getElementById("exportFilteredCsvBtn");
 
 const resultBox = document.getElementById("resultBox");
 const applicationIdEl = document.getElementById("applicationId");
@@ -84,6 +85,26 @@ let currentPageData = null;
 let latestCandidateProfile = null;
 let latestApplicationDraft = null;
 let allCandidates = [];
+
+function buildApplicationsExportCsvUrl(filters = {}) {
+  const params = new URLSearchParams();
+
+  if (filters.status) {
+    params.set("status", filters.status);
+  }
+
+  if (filters.createdBy) {
+    params.set("created_by", filters.createdBy);
+  }
+
+  if (filters.candidateId) {
+    params.set("candidate_id", filters.candidateId);
+  }
+
+  params.set("limit", "500");
+
+  return `${API_BASE_URL}/applications/export.csv?${params.toString()}`;
+}
 
 function showLowMatchWarning(matchScore) {
   lowMatchWarningBox.classList.remove("hidden", "block", "review", "good");
@@ -465,9 +486,28 @@ async function getActiveTab() {
 async function getJobPageData() {
   const tab = await getActiveTab();
 
-  return await chrome.tabs.sendMessage(tab.id, {
-    type: "GET_JOB_PAGE_DATA",
-  });
+  if (!tab || !tab.id) {
+    throw new Error("No active browser tab found.");
+  }
+
+  try {
+    const response = await chrome.tabs.sendMessage(tab.id, {
+      type: "GET_JOB_PAGE_DATA",
+    });
+
+    if (response && response.url) {
+      return response;
+    }
+  } catch (error) {
+    console.warn("Content script did not respond. Using tab fallback.", error);
+  }
+
+  return {
+    url: tab.url || "",
+    title: tab.title || "",
+    pageText: "",
+    detectedJobInfo: null,
+  };
 }
 
 async function loadCurrentUrl() {
@@ -821,19 +861,37 @@ function getOverrideData() {
   };
 }
 
-exportDailyCsvBtn.addEventListener("click", async () => {
-  try {
-    const today = getTodayDateString();
-    const csvUrl = `${API_BASE_URL}/reports/daily.csv?report_date=${today}`;
+if (exportFilteredCsvBtn) {
+  exportFilteredCsvBtn.addEventListener("click", () => {
+    try {
+      const filters = getRecentApplicationFilters();
+      const csvUrl = buildApplicationsExportCsvUrl(filters);
 
-    chrome.tabs.create({ url: csvUrl });
+      chrome.tabs.create({ url: csvUrl });
 
-    setStatus("CSV export opened in a new tab.", "success");
-  } catch (error) {
-    console.error(error);
-    setStatus("CSV export error: " + error.message, "error");
-  }
-});
+      setStatus("Filtered CSV export opened in a new tab.", "success");
+    } catch (error) {
+      console.error(error);
+      setStatus("Filtered CSV export error: " + error.message, "error");
+    }
+  });
+}
+
+if (exportDailyCsvBtn) {
+  exportDailyCsvBtn.addEventListener("click", async () => {
+    try {
+      const today = getTodayDateString();
+      const csvUrl = `${API_BASE_URL}/reports/daily.csv?report_date=${today}`;
+
+      chrome.tabs.create({ url: csvUrl });
+
+      setStatus("CSV export opened in a new tab.", "success");
+    } catch (error) {
+      console.error(error);
+      setStatus("CSV export error: " + error.message, "error");
+    }
+  });
+}
 
 recentApplicationsBtn.addEventListener("click", async () => {
   try {
@@ -1089,6 +1147,8 @@ captureBtn.addEventListener("click", async () => {
         "Company or job title missing. Running AI detection...",
         "success",
       );
+
+      currentPageData = await getJobPageData();
 
       const extracted = await aiExtractJobInfo(currentPageData);
 

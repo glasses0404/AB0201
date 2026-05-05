@@ -190,6 +190,124 @@ def list_applications(
 
     return applications
 
+@app.get("/applications/export.csv")
+def export_applications_csv(
+    status: str | None = None,
+    created_by: str | None = None,
+    candidate_id: int | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    limit: int = 500,
+    db: Session = Depends(get_db)
+):
+    """
+    Export applications as CSV with optional filters.
+
+    Examples:
+    /applications/export.csv
+    /applications/export.csv?status=Submitted
+    /applications/export.csv?created_by=David
+    /applications/export.csv?candidate_id=1
+    /applications/export.csv?start_date=2026-05-01&end_date=2026-05-05
+    """
+
+    query = db.query(Application)
+
+    if status:
+      query = query.filter(Application.status == status)
+
+    if created_by:
+      query = query.filter(Application.created_by == created_by)
+
+    if candidate_id:
+      query = query.filter(Application.candidate_id == candidate_id)
+
+    if start_date:
+        try:
+            parsed_start = datetime.strptime(start_date, "%Y-%m-%d").date()
+            start_datetime = datetime.combine(parsed_start, time.min)
+            query = query.filter(Application.created_at >= start_datetime)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid start_date format. Use YYYY-MM-DD."
+            )
+
+    if end_date:
+        try:
+            parsed_end = datetime.strptime(end_date, "%Y-%m-%d").date()
+            end_datetime = datetime.combine(parsed_end, time.max)
+            query = query.filter(Application.created_at <= end_datetime)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid end_date format. Use YYYY-MM-DD."
+            )
+
+    applications = query.order_by(Application.created_at.desc()).limit(limit).all()
+
+    output = StringIO()
+
+    fieldnames = [
+        "application_id",
+        "candidate_id",
+        "candidate_name",
+        "company_name",
+        "job_title",
+        "created_by",
+        "status",
+        "match_score",
+        "duplicate_status",
+        "original_job_url",
+        "canonical_job_url",
+        "submitted_at",
+        "created_at",
+        "manager_override_used",
+        "manager_override_by",
+        "manager_override_reason",
+        "manager_override_at"
+    ]
+
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+
+    for app_item in applications:
+        candidate_name = "Unknown Candidate"
+
+        if app_item.candidate:
+            candidate_name = f"{app_item.candidate.first_name} {app_item.candidate.last_name}"
+
+        writer.writerow({
+            "application_id": app_item.id,
+            "candidate_id": app_item.candidate_id,
+            "candidate_name": candidate_name,
+            "company_name": app_item.company_name,
+            "job_title": app_item.job_title,
+            "created_by": app_item.created_by or "Unknown",
+            "status": app_item.status,
+            "match_score": app_item.match_score,
+            "duplicate_status": app_item.duplicate_status,
+            "original_job_url": app_item.original_job_url,
+            "canonical_job_url": app_item.canonical_job_url,
+            "submitted_at": app_item.submitted_at.isoformat() if app_item.submitted_at else "",
+            "created_at": app_item.created_at.isoformat() if app_item.created_at else "",
+            "manager_override_used": app_item.manager_override_used or "No",
+            "manager_override_by": app_item.manager_override_by or "",
+            "manager_override_reason": app_item.manager_override_reason or "",
+            "manager_override_at": app_item.manager_override_at.isoformat() if app_item.manager_override_at else ""
+        })
+
+    output.seek(0)
+
+    filename = f"applications_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
+    )
 
 @app.get("/applications/{application_id}", response_model=ApplicationResponse)
 def get_application(application_id: int, db: Session = Depends(get_db)):
