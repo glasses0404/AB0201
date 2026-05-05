@@ -2,6 +2,7 @@ import os
 import csv
 from io import StringIO
 from fastapi.responses import StreamingResponse
+from services.google_sheets_service import sync_applications_to_sheet
 
 from datetime import datetime, date, time
 from fastapi import FastAPI, Depends, HTTPException
@@ -584,3 +585,38 @@ def export_daily_report_csv(report_date: str, db: Session = Depends(get_db)):
             "Content-Disposition": f"attachment; filename={filename}"
         }
     )
+
+@app.post("/sync/google-sheets/applications")
+def sync_applications_google_sheets(
+    status: str | None = None,
+    created_by: str | None = None,
+    candidate_id: int | None = None,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    query = db.query(Application)
+
+    if status:
+        query = query.filter(Application.status == status)
+
+    if created_by:
+        query = query.filter(Application.created_by == created_by)
+
+    if candidate_id:
+        query = query.filter(Application.candidate_id == candidate_id)
+
+    applications = query.order_by(Application.created_at.desc()).limit(limit).all()
+
+    result = sync_applications_to_sheet(applications)
+
+    return {
+        "message": "Applications synced to Google Sheets",
+        "filters": {
+            "status": status,
+            "created_by": created_by,
+            "candidate_id": candidate_id,
+            "limit": limit
+        },
+        "rows_synced": result["rows_synced"],
+        "worksheet": result["worksheet"]
+    }

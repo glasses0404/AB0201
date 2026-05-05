@@ -5,3 +5,5 @@ pydantic
 python-dotenv
 openai
 python-multipart
+GOOGLE_SHEET_ID=1yRf3mVe1i15xCJdrs7EW-5hfWiLftzYav7ouzaTpy2I
+GOOGLE_SERVICE_ACCOUNT_FILE=google_service_account.json

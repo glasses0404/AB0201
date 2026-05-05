@@ -1,5 +1,6 @@
 const API_BASE_URL = "http://127.0.0.1:8000";
 
+const syncGoogleSheetsBtn = document.getElementById("syncGoogleSheetsBtn");
 const recentApplicationsBtn = document.getElementById("recentApplicationsBtn");
 const recentApplicationsBox = document.getElementById("recentApplicationsBox");
 const recentApplicationsOutput = document.getElementById(
@@ -176,6 +177,38 @@ function showDuplicateWarning(duplicateStatus) {
 
   duplicateWarningBox.classList.add("hidden");
   duplicateWarningBox.innerHTML = "";
+}
+
+async function syncApplicationsToGoogleSheets(filters = {}) {
+  const params = new URLSearchParams();
+
+  params.set("limit", "100");
+
+  if (filters.status) {
+    params.set("status", filters.status);
+  }
+
+  if (filters.createdBy) {
+    params.set("created_by", filters.createdBy);
+  }
+
+  if (filters.candidateId) {
+    params.set("candidate_id", filters.candidateId);
+  }
+
+  const response = await fetch(
+    `${API_BASE_URL}/sync/google-sheets/applications?${params.toString()}`,
+    {
+      method: "POST",
+    },
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
+
+  return await response.json();
 }
 
 async function getRecentApplications(filters = {}) {
@@ -859,6 +892,28 @@ function getOverrideData() {
     overrideBy: overrideByInput.value.trim(),
     overrideReason: overrideReasonInput.value.trim(),
   };
+}
+
+if (syncGoogleSheetsBtn) {
+  syncGoogleSheetsBtn.addEventListener("click", async () => {
+    try {
+      setStatus("Syncing applications to Google Sheets...", "success");
+
+      const filters = getRecentApplicationFilters
+        ? getRecentApplicationFilters()
+        : {};
+
+      const result = await syncApplicationsToGoogleSheets(filters);
+
+      setStatus(
+        `Google Sheets sync complete. Rows synced: ${result.rows_synced}`,
+        "success",
+      );
+    } catch (error) {
+      console.error(error);
+      setStatus("Google Sheets sync error: " + error.message, "error");
+    }
+  });
 }
 
 if (exportFilteredCsvBtn) {
