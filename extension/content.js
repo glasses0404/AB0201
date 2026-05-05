@@ -231,25 +231,151 @@ function autofillBasicFields(profile) {
   });
 }
 
+function base64ToArrayBuffer(base64) {
+  const binaryString = atob(base64);
+  const length = binaryString.length;
+  const bytes = new Uint8Array(length);
+
+  for (let i = 0; i < length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+
+  return bytes.buffer;
+}
+
+function isLikelyResumeUploadInput(input) {
+  if (!input || input.type !== "file") {
+    return false;
+  }
+
+  const label = findLabelText(input);
+  const accept = (input.getAttribute("accept") || "").toLowerCase();
+  const name = (input.getAttribute("name") || "").toLowerCase();
+  const id = (input.getAttribute("id") || "").toLowerCase();
+
+  const combined = `${label} ${accept} ${name} ${id}`.toLowerCase();
+
+  return (
+    combined.includes("resume") ||
+    combined.includes("cv") ||
+    combined.includes("curriculum") ||
+    combined.includes("upload") ||
+    combined.includes(".pdf") ||
+    combined.includes(".doc") ||
+    combined.includes(".docx")
+  );
+}
+
+function findResumeFileInput() {
+  const fileInputs = Array.from(
+    document.querySelectorAll('input[type="file"]'),
+  );
+
+  if (!fileInputs.length) {
+    return null;
+  }
+
+  const resumeInput = fileInputs.find(isLikelyResumeUploadInput);
+
+  if (resumeInput) {
+    return resumeInput;
+  }
+
+  // Fallback: if there is only one file input, use it.
+  if (fileInputs.length === 1) {
+    return fileInputs[0];
+  }
+
+  return null;
+}
+
+function uploadResumeFileToPage(resumeData) {
+  const input = findResumeFileInput();
+
+  if (!input) {
+    return {
+      success: false,
+      message: "Could not find a resume upload field on this page.",
+    };
+  }
+
+  const arrayBuffer = base64ToArrayBuffer(resumeData.base64Data);
+
+  const file = new File([arrayBuffer], resumeData.fileName, {
+    type: resumeData.fileType || "application/octet-stream",
+  });
+
+  const dataTransfer = new DataTransfer();
+  dataTransfer.items.add(file);
+
+  input.files = dataTransfer.files;
+
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+
+  return {
+    success: true,
+    message: `Resume uploaded: ${resumeData.fileName}`,
+  };
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type === "GET_JOB_PAGE_DATA") {
-    const detectedJobInfo = detectJobInfo();
+  try {
+    if (request.type === "PING_CONTENT_SCRIPT") {
+      sendResponse({
+        success: true,
+        message: "content.js is active",
+      });
+
+      return false;
+    }
+    if (request.type === "GET_JOB_PAGE_DATA") {
+      const detectedJobInfo = detectJobInfo();
+
+      sendResponse({
+        success: true,
+        url: window.location.href,
+        title: document.title,
+        pageText: getVisiblePageText(),
+        detectedJobInfo,
+      });
+
+      return false;
+    }
+
+    if (request.type === "AUTOFILL_BASIC_FIELDS") {
+      autofillBasicFields(request.profile);
+
+      sendResponse({
+        success: true,
+        message: "Basic fields autofilled. Please review before submitting.",
+      });
+
+      return false;
+    }
+
+    if (request.type === "UPLOAD_RESUME_FILE") {
+      const result = uploadResumeFileToPage(request.resumeData);
+
+      sendResponse(result);
+
+      return false;
+    }
 
     sendResponse({
-      url: window.location.href,
-      title: document.title,
-      pageText: getVisiblePageText(),
-      detectedJobInfo,
+      success: false,
+      message: "Unknown message type.",
     });
-  }
 
-  if (request.type === "AUTOFILL_BASIC_FIELDS") {
-    autofillBasicFields(request.profile);
+    return false;
+  } catch (error) {
+    console.error("content.js message error:", error);
+
     sendResponse({
-      success: true,
-      message: "Basic fields autofilled. Please review before submitting.",
+      success: false,
+      message: error.message || "Content script error.",
     });
-  }
 
-  return true;
+    return false;
+  }
 });

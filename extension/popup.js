@@ -1,5 +1,9 @@
 const API_BASE_URL = "http://127.0.0.1:8000";
 
+const resumeFileInput = document.getElementById("resumeFileInput");
+const saveResumeFileBtn = document.getElementById("saveResumeFileBtn");
+const uploadResumeToPageBtn = document.getElementById("uploadResumeToPageBtn");
+const resumeFilePreview = document.getElementById("resumeFilePreview");
 const checkBackendHealthBtn = document.getElementById("checkBackendHealthBtn");
 const slackLogsBtn = document.getElementById("slackLogsBtn");
 const slackLogsBox = document.getElementById("slackLogsBox");
@@ -362,6 +366,114 @@ function renderRecentApplications(applications) {
       }
     });
   });
+}
+
+async function ensureContentScript(tabId) {
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, {
+      type: "PING_CONTENT_SCRIPT",
+    });
+
+    if (response && response.success) {
+      return true;
+    }
+  } catch (error) {
+    // content.js is not available yet, so inject it below
+  }
+
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ["content.js"],
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 300));
+
+  return true;
+}
+
+function arrayBufferToBase64(buffer) {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+
+  return btoa(binary);
+}
+
+function base64ToArrayBuffer(base64) {
+  const binaryString = atob(base64);
+  const length = binaryString.length;
+  const bytes = new Uint8Array(length);
+
+  for (let i = 0; i < length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+
+  return bytes.buffer;
+}
+
+function getResumeStorageKey(candidateId) {
+  return `resume_file_candidate_${candidateId}`;
+}
+
+async function saveResumeFileForCandidate(candidateId, file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const base64Data = arrayBufferToBase64(arrayBuffer);
+
+  const resumeData = {
+    fileName: file.name,
+    fileType: file.type || "application/octet-stream",
+    fileSize: file.size,
+    base64Data,
+  };
+
+  const key = getResumeStorageKey(candidateId);
+
+  await chrome.storage.local.set({
+    [key]: resumeData,
+  });
+
+  return resumeData;
+}
+
+async function getSavedResumeFileForCandidate(candidateId) {
+  const key = getResumeStorageKey(candidateId);
+
+  return new Promise((resolve) => {
+    chrome.storage.local.get([key], (result) => {
+      resolve(result[key] || null);
+    });
+  });
+}
+
+function showResumeFilePreview(resumeData) {
+  if (!resumeData) {
+    resumeFilePreview.classList.add("hidden");
+    resumeFilePreview.innerHTML = "";
+    return;
+  }
+
+  resumeFilePreview.classList.remove("hidden");
+  resumeFilePreview.innerHTML = `
+    <strong>Saved Resume</strong><br>
+    File: ${resumeData.fileName}<br>
+    Type: ${resumeData.fileType || "Unknown"}<br>
+    Size: ${Math.round((resumeData.fileSize || 0) / 1024)} KB
+  `;
+}
+
+async function loadSavedResumePreview() {
+  const candidateId = getSelectedCandidateId();
+
+  if (!candidateId) {
+    showResumeFilePreview(null);
+    return;
+  }
+
+  const resumeData = await getSavedResumeFileForCandidate(candidateId);
+  showResumeFilePreview(resumeData);
 }
 
 async function checkBackendHealth() {
@@ -1071,6 +1183,112 @@ if (slackLogsBtn) {
   });
 }
 
+if (saveResumeFileBtn) {
+  saveResumeFileBtn.addEventListener("click", async () => {
+    try {
+      const candidateId = getSelectedCandidateId();
+
+      if (!candidateId) {
+        setStatus("Please select a candidate before saving a resume.", "error");
+        return;
+      }
+
+      const file = resumeFileInput.files && resumeFileInput.files[0];
+
+      if (!file) {
+        setStatus("Please choose a resume file first.", "error");
+        return;
+      }
+
+      const allowedExtensions = [".pdf", ".doc", ".docx", ".txt"];
+      const lowerFileName = file.name.toLowerCase();
+
+      const isAllowed = allowedExtensions.some((ext) =>
+        lowerFileName.endsWith(ext),
+      );
+
+      if (!isAllowed) {
+        setStatus("Only PDF, DOC, DOCX, and TXT files are allowed.", "error");
+        return;
+      }
+
+      const maxSizeMb = 8;
+      const maxSizeBytes = maxSizeMb * 1024 * 1024;
+
+      if (file.size > maxSizeBytes) {
+        setStatus(
+          `Resume file is too large. Max size is ${maxSizeMb} MB.`,
+          "error",
+        );
+        return;
+      }
+
+      setStatus("Saving resume file...", "success");
+
+      const resumeData = await saveResumeFileForCandidate(candidateId, file);
+
+      showResumeFilePreview(resumeData);
+
+      setStatus(`Resume saved for candidate #${candidateId}.`, "success");
+    } catch (error) {
+      console.error(error);
+      setStatus("Resume save error: " + error.message, "error");
+    }
+  });
+}
+
+if (uploadResumeToPageBtn) {
+  uploadResumeToPageBtn.addEventListener("click", async () => {
+    try {
+      const candidateId = getSelectedCandidateId();
+
+      if (!candidateId) {
+        setStatus("Please select a candidate first.", "error");
+        return;
+      }
+
+      const resumeData = await getSavedResumeFileForCandidate(candidateId);
+
+      if (!resumeData) {
+        setStatus("No saved resume found for this candidate.", "error");
+        return;
+      }
+
+      const tab = await getActiveTab();
+
+      if (!tab || !tab.id) {
+        throw new Error("No active tab found.");
+      }
+
+      if (
+        tab.url.startsWith("chrome://") ||
+        tab.url.startsWith("chrome-extension://") ||
+        tab.url.startsWith("edge://")
+      ) {
+        throw new Error(
+          "Open the actual job application page, then try again.",
+        );
+      }
+
+      await ensureContentScript(tab.id);
+
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        type: "UPLOAD_RESUME_FILE",
+        resumeData,
+      });
+
+      if (!response || !response.success) {
+        throw new Error(response?.message || "Resume upload failed.");
+      }
+
+      setStatus(response.message, "success");
+    } catch (error) {
+      console.error(error);
+      setStatus("Resume upload error: " + error.message, "error");
+    }
+  });
+}
+
 if (checkBackendHealthBtn) {
   checkBackendHealthBtn.addEventListener("click", async () => {
     try {
@@ -1433,8 +1651,9 @@ candidateSearchInput.addEventListener("input", () => {
   filterCandidates(candidateSearchInput.value);
 });
 
-candidateSelect.addEventListener("change", () => {
+candidateSelect.addEventListener("change", async () => {
   updateCandidatePreview();
+  await loadSavedResumePreview();
 });
 
 toggleCreateCandidateBtn.addEventListener("click", () => {
@@ -1469,6 +1688,8 @@ createCandidateBtn.addEventListener("click", async () => {
 
     candidateSelect.value = String(newCandidate.id);
     updateCandidatePreview();
+
+    await loadSavedResumePreview();
 
     clearCreateCandidateForm();
 
