@@ -1,195 +1,303 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-  <meta charset="UTF-8" />
-  <title>Autobidder Assistant</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      width: 420px;
-      padding: 14px;
-      background: #f7f7f7;
-    }
+  <head>
+    <meta charset="UTF-8" />
+    <title>Autobidder Assistant</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        width: 420px;
+        padding: 14px;
+        background: #f7f7f7;
+      }
 
-    h2 {
-      margin-top: 0;
-      font-size: 18px;
-    }
+      h2 {
+        margin-top: 0;
+        font-size: 18px;
+      }
 
-    label {
-      font-size: 13px;
-      font-weight: bold;
-      margin-top: 10px;
-      display: block;
-    }
+      label {
+        font-size: 13px;
+        font-weight: bold;
+        margin-top: 10px;
+        display: block;
+      }
 
-    input, textarea, select, button {
-			width: 100%;
-			box-sizing: border-box;
-			margin-top: 5px;
-			padding: 8px;
-			font-size: 13px;
-		}
+      input,
+      textarea,
+      select,
+      button {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 5px;
+        padding: 8px;
+        font-size: 13px;
+      }
 
-    textarea {
-      min-height: 70px;
-      resize: vertical;
-    }
+      textarea {
+        min-height: 70px;
+        resize: vertical;
+      }
 
-    button {
-      margin-top: 12px;
-      background: #111827;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      padding: 10px;
-    }
+      button {
+        margin-top: 12px;
+        background: #111827;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        padding: 10px;
+      }
 
-    button:hover {
-      background: #374151;
-    }
+      button:hover {
+        background: #374151;
+      }
 
-    .secondary {
-      background: #2563eb;
-    }
+      .secondary {
+        background: #2563eb;
+      }
 
-    .success {
-      color: green;
-      font-size: 13px;
-      margin-top: 8px;
-    }
+      .success {
+        color: green;
+        font-size: 13px;
+        margin-top: 8px;
+      }
 
-    .error {
-      color: red;
-      font-size: 13px;
-      margin-top: 8px;
-    }
+      .error {
+        color: red;
+        font-size: 13px;
+        margin-top: 8px;
+      }
 
-    .small {
-      font-size: 12px;
-      color: #555;
-      word-break: break-all;
-    }
+      .small {
+        font-size: 12px;
+        color: #555;
+        word-break: break-all;
+      }
 
-    .result-box {
-      margin-top: 14px;
-      background: white;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 10px;
-    }
+      .result-box {
+        margin-top: 14px;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 10px;
+      }
 
-    .result-title {
-      font-weight: bold;
-      margin-bottom: 6px;
-      font-size: 14px;
-    }
+      .result-title {
+        font-weight: bold;
+        margin-bottom: 6px;
+        font-size: 14px;
+      }
 
-    .metric-row {
-      display: flex;
-      justify-content: space-between;
-      font-size: 13px;
-      margin: 4px 0;
-    }
+      .metric-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        margin: 4px 0;
+      }
 
-    .output-text {
-      white-space: pre-wrap;
-      font-size: 12px;
-      line-height: 1.4;
-      max-height: 180px;
-      overflow-y: auto;
-      background: #f9fafb;
-      border: 1px solid #e5e7eb;
-      padding: 8px;
-      border-radius: 6px;
-    }
+      .output-text {
+        white-space: pre-wrap;
+        font-size: 12px;
+        line-height: 1.4;
+        max-height: 180px;
+        overflow-y: auto;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        padding: 8px;
+        border-radius: 6px;
+      }
 
-    .copy-btn {
-      background: #059669;
-      margin-top: 6px;
-      padding: 7px;
-      font-size: 12px;
-    }
+      .copy-btn {
+        background: #059669;
+        margin-top: 6px;
+        padding: 7px;
+        font-size: 12px;
+      }
 
-    .hidden {
-      display: none;
-    }
+      .hidden {
+        display: none;
+      }
 
-		.candidate-preview {
-			margin-top: 8px;
-			padding: 8px;
-			background: #eef2ff;
-			border: 1px solid #c7d2fe;
-			border-radius: 6px;
-			font-size: 12px;
-			color: #1f2937;
-			line-height: 1.4;
-		}
-  </style>
-</head>
-<body>
-  <h2>Autobidder Assistant</h2>
+      .candidate-preview {
+        margin-top: 8px;
+        padding: 8px;
+        background: #eef2ff;
+        border: 1px solid #c7d2fe;
+        border-radius: 6px;
+        font-size: 12px;
+        color: #1f2937;
+        line-height: 1.4;
+      }
 
-  <label>Search Candidate</label>
-    <input id="candidateSearch" type="text" placeholder="Search by name, email, or location" />
+      .create-candidate-box {
+        margin-top: 14px;
+        background: #ffffff;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        padding: 10px;
+      }
+
+      .create-candidate-box textarea {
+        min-height: 140px;
+      }
+
+      .create-candidate-box input,
+      .create-candidate-box select,
+      .create-candidate-box textarea {
+        background: #ffffff;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Autobidder Assistant</h2>
+
+    <label>Search Candidate</label>
+    <input
+      id="candidateSearch"
+      type="text"
+      placeholder="Search by name, email, or location"
+    />
 
     <label>Select Candidate</label>
     <select id="candidateSelect">
-    <option value="">Loading candidates...</option>
+      <option value="">Loading candidates...</option>
     </select>
 
-<div id="candidatePreview" class="candidate-preview hidden"></div>
+    <div id="candidatePreview" class="candidate-preview hidden"></div>
 
-  <label>Company Name</label>
-  <input id="companyName" type="text" placeholder="Example: HCA Healthcare" />
+    <button id="toggleCreateCandidateBtn" class="secondary">
+      Show Create Candidate
+    </button>
 
-  <label>Job Title</label>
-  <input id="jobTitle" type="text" placeholder="Example: Senior Data Engineer" />
+    <div id="createCandidateBox" class="create-candidate-box hidden">
+      <div class="result-title">Create New Candidate</div>
 
-  <label>Screening Questions</label>
-  <textarea id="screeningQuestions" placeholder="Enter one question per line"></textarea>
+      <label>First Name *</label>
+      <input id="newFirstName" type="text" placeholder="Example: Michael" />
 
-  <label>Current Job URL</label>
-  <div id="currentUrl" class="small">Loading...</div>
+      <label>Last Name *</label>
+      <input id="newLastName" type="text" placeholder="Example: Johnson" />
 
-  <button id="captureBtn">Generate Application Draft</button>
-  <button id="autofillBtn" class="secondary">Autofill Basic Fields</button>
+      <label>Email</label>
+      <input id="newEmail" type="email" placeholder="michael@example.com" />
 
-  <div id="status"></div>
+      <label>Phone</label>
+      <input id="newPhone" type="text" placeholder="555-555-5555" />
 
-  <div id="resultBox" class="result-box hidden">
-    <div class="result-title">Application Draft Result</div>
+      <label>Location</label>
+      <input id="newLocation" type="text" placeholder="Dallas, TX" />
 
-    <div class="metric-row">
-      <span>Application ID:</span>
-      <strong id="applicationId">-</strong>
+      <label>LinkedIn</label>
+      <input
+        id="newLinkedin"
+        type="text"
+        placeholder="https://linkedin.com/in/..."
+      />
+
+      <label>GitHub</label>
+      <input id="newGithub" type="text" placeholder="https://github.com/..." />
+
+      <label>Portfolio</label>
+      <input
+        id="newPortfolio"
+        type="text"
+        placeholder="https://portfolio.com"
+      />
+
+      <label>Work Authorization</label>
+      <input
+        id="newWorkAuthorization"
+        type="text"
+        placeholder="US Citizen / Green Card / H1B / etc."
+      />
+
+      <label>Sponsorship Required</label>
+      <select id="newSponsorshipRequired">
+        <option value="">Select</option>
+        <option value="No">No</option>
+        <option value="Yes">Yes</option>
+        <option value="Manual Review Required">Manual Review Required</option>
+      </select>
+
+      <label>Expected Salary</label>
+      <input
+        id="newExpectedSalary"
+        type="text"
+        placeholder="$130,000 - $150,000"
+      />
+
+      <label>Resume Text *</label>
+      <textarea
+        id="newResumeText"
+        placeholder="Paste resume text here"
+      ></textarea>
+
+      <button id="createCandidateBtn">Create Candidate</button>
     </div>
 
-    <div class="metric-row">
-      <span>Match Score:</span>
-      <strong id="matchScore">-</strong>
+    <div id="candidatePreview" class="candidate-preview hidden"></div>
+
+    <label>Company Name</label>
+    <input id="companyName" type="text" placeholder="Example: HCA Healthcare" />
+
+    <label>Job Title</label>
+    <input
+      id="jobTitle"
+      type="text"
+      placeholder="Example: Senior Data Engineer"
+    />
+
+    <label>Screening Questions</label>
+    <textarea
+      id="screeningQuestions"
+      placeholder="Enter one question per line"
+    ></textarea>
+
+    <label>Current Job URL</label>
+    <div id="currentUrl" class="small">Loading...</div>
+
+    <button id="captureBtn">Generate Application Draft</button>
+    <button id="autofillBtn" class="secondary">Autofill Basic Fields</button>
+
+    <div id="status"></div>
+
+    <div id="resultBox" class="result-box hidden">
+      <div class="result-title">Application Draft Result</div>
+
+      <div class="metric-row">
+        <span>Application ID:</span>
+        <strong id="applicationId">-</strong>
+      </div>
+
+      <div class="metric-row">
+        <span>Match Score:</span>
+        <strong id="matchScore">-</strong>
+      </div>
+
+      <div class="metric-row">
+        <span>Duplicate:</span>
+        <strong id="duplicateStatus">-</strong>
+      </div>
+
+      <div class="metric-row">
+        <span>Status:</span>
+        <strong id="applicationStatus">-</strong>
+      </div>
+
+      <label>Cover Letter</label>
+      <div id="coverLetterOutput" class="output-text"></div>
+      <button id="copyCoverLetterBtn" class="copy-btn">
+        Copy Cover Letter
+      </button>
+
+      <label>Screening Answers</label>
+      <div id="screeningAnswersOutput" class="output-text"></div>
+      <button id="copyScreeningAnswersBtn" class="copy-btn">
+        Copy Screening Answers
+      </button>
     </div>
 
-    <div class="metric-row">
-      <span>Duplicate:</span>
-      <strong id="duplicateStatus">-</strong>
-    </div>
-
-    <div class="metric-row">
-      <span>Status:</span>
-      <strong id="applicationStatus">-</strong>
-    </div>
-
-    <label>Cover Letter</label>
-    <div id="coverLetterOutput" class="output-text"></div>
-    <button id="copyCoverLetterBtn" class="copy-btn">Copy Cover Letter</button>
-
-    <label>Screening Answers</label>
-    <div id="screeningAnswersOutput" class="output-text"></div>
-    <button id="copyScreeningAnswersBtn" class="copy-btn">Copy Screening Answers</button>
-  </div>
-
-  <script src="popup.js"></script>
-</body>
+    <script src="popup.js"></script>
+  </body>
 </html>

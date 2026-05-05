@@ -58,7 +58,10 @@ function autofillBasicFields(profile) {
     } else if (label.includes("last name")) {
       setInputValue(input, profile.last_name);
     } else if (label.includes("full name") || label === "name") {
-      setInputValue(input, `${profile.first_name || ""} ${profile.last_name || ""}`.trim());
+      setInputValue(
+        input,
+        `${profile.first_name || ""} ${profile.last_name || ""}`.trim(),
+      );
     } else if (label.includes("email")) {
       setInputValue(input, profile.email);
     } else if (label.includes("phone") || label.includes("mobile")) {
@@ -80,7 +83,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({
       url: window.location.href,
       title: document.title,
-      pageText: getVisiblePageText()
+      pageText: getVisiblePageText(),
     });
   }
 
@@ -88,7 +91,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     autofillBasicFields(request.profile);
     sendResponse({
       success: true,
-      message: "Basic fields autofilled. Please review before submitting."
+      message: "Basic fields autofilled. Please review before submitting.",
     });
   }
 
