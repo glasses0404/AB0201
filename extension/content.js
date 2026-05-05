@@ -497,6 +497,8 @@ async function runAutobidderPageAnalysis() {
       screeningFields = detectGreenhouseScreeningFields();
     } else if (atsType === "lever") {
       screeningFields = detectLeverScreeningFields();
+    } else if (atsType === "ashby") {
+      screeningFields = detectAshbyScreeningFields();
     } else {
       screeningFields = detectScreeningFields();
     }
@@ -648,6 +650,65 @@ function detectLeverScreeningFields() {
 
   return fields;
 }
+function detectAshbyScreeningFields() {
+  const fields = [];
+
+  const containers = Array.from(
+    document.querySelectorAll("div, section, fieldset"),
+  );
+
+  containers.forEach((container, index) => {
+    const input = container.querySelector(
+      "textarea, input[type='text'], input[type='number'], select",
+    );
+
+    if (!input) return;
+
+    const labelText = container.innerText.replace(/\s+/g, " ").trim();
+
+    if (!labelText || labelText.length < 5 || labelText.length > 800) return;
+
+    const lower = labelText.toLowerCase();
+
+    const looksLikeQuestion =
+      lower.includes("?") ||
+      lower.includes("authorized") ||
+      lower.includes("sponsor") ||
+      lower.includes("experience") ||
+      lower.includes("years") ||
+      lower.includes("salary") ||
+      lower.includes("relocate") ||
+      lower.includes("remote") ||
+      lower.includes("why") ||
+      lower.includes("describe") ||
+      lower.includes("gender") ||
+      lower.includes("veteran") ||
+      lower.includes("disability");
+
+    if (!looksLikeQuestion) return;
+
+    const fieldId = `ashby-field-${index}`;
+    input.setAttribute("data-autobidder-field-id", fieldId);
+
+    let options = [];
+
+    if (input.tagName.toLowerCase() === "select") {
+      options = Array.from(input.options)
+        .map((option) => option.textContent.trim())
+        .filter(Boolean);
+    }
+
+    fields.push({
+      fieldId,
+      fieldType: input.tagName.toLowerCase(),
+      inputType: input.getAttribute("type") || "",
+      label: labelText,
+      options,
+    });
+  });
+
+  return fields;
+}
 
 function detectGreenhouseScreeningFields() {
   const fields = [];
@@ -739,6 +800,9 @@ async function runAutobidderAutofillFromPanel() {
     } else if (atsType === "lever") {
       const leverResult = fillLeverBasicFields(candidate);
       basicFillMessage = `Lever fields filled: ${leverResult.filledCount}`;
+    } else if (atsType === "ashby") {
+      const ashbyResult = fillAshbyBasicFields(candidate);
+      basicFillMessage = `Ashby fields filled: ${ashbyResult.filledCount}`;
     } else {
       autofillBasicFields(candidate);
       basicFillMessage = "Generic profile fields filled.";
@@ -1354,6 +1418,77 @@ function fillLeverBasicFields(profile) {
       const label = findLabelText(el).toLowerCase();
       const parentText =
         el.closest("li, div, label")?.innerText?.toLowerCase() || "";
+
+      const combined = `${id} ${name} ${placeholder} ${aria} ${label} ${parentText}`;
+
+      return mapping.keys.some((key) => combined.includes(key));
+    });
+
+    if (field) {
+      setNativeValue(field, mapping.value);
+      filledCount += 1;
+    }
+  });
+
+  return {
+    success: true,
+    filledCount,
+  };
+}
+
+function fillAshbyBasicFields(profile) {
+  const fields = Array.from(
+    document.querySelectorAll("input, textarea, select"),
+  );
+
+  const mappings = [
+    {
+      keys: ["first name", "firstname", "given name"],
+      value: profile.first_name,
+    },
+    {
+      keys: ["last name", "lastname", "family name", "surname"],
+      value: profile.last_name,
+    },
+    {
+      keys: ["full name", "name"],
+      value: `${profile.first_name || ""} ${profile.last_name || ""}`.trim(),
+    },
+    {
+      keys: ["email", "email address"],
+      value: profile.email,
+    },
+    {
+      keys: ["phone", "mobile", "phone number"],
+      value: profile.phone,
+    },
+    {
+      keys: ["linkedin", "linkedin profile"],
+      value: profile.linkedin,
+    },
+    {
+      keys: ["github", "github profile"],
+      value: profile.github,
+    },
+    {
+      keys: ["website", "portfolio", "personal site"],
+      value: profile.portfolio,
+    },
+  ];
+
+  let filledCount = 0;
+
+  mappings.forEach((mapping) => {
+    if (!mapping.value) return;
+
+    const field = fields.find((el) => {
+      const id = (el.id || "").toLowerCase();
+      const name = (el.name || "").toLowerCase();
+      const placeholder = (el.getAttribute("placeholder") || "").toLowerCase();
+      const aria = (el.getAttribute("aria-label") || "").toLowerCase();
+      const label = findLabelText(el).toLowerCase();
+      const parentText =
+        el.closest("div, label, section")?.innerText?.toLowerCase() || "";
 
       const combined = `${id} ${name} ${placeholder} ${aria} ${label} ${parentText}`;
 
