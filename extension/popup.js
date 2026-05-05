@@ -29,6 +29,8 @@ const newResumeTextInput = document.getElementById("newResumeText");
 
 const companyNameInput = document.getElementById("companyName");
 const jobTitleInput = document.getElementById("jobTitle");
+const detectJobInfoBtn = document.getElementById("detectJobInfoBtn");
+const jobInfoPreview = document.getElementById("jobInfoPreview");
 const screeningQuestionsInput = document.getElementById("screeningQuestions");
 const currentUrlDiv = document.getElementById("currentUrl");
 const captureBtn = document.getElementById("captureBtn");
@@ -103,6 +105,38 @@ async function createCandidate(payload) {
   return await response.json();
 }
 
+function applyDetectedJobInfo(detectedJobInfo) {
+  if (!detectedJobInfo) return;
+
+  if (detectedJobInfo.companyName && !companyNameInput.value.trim()) {
+    companyNameInput.value = detectedJobInfo.companyName;
+  }
+
+  if (detectedJobInfo.jobTitle && !jobTitleInput.value.trim()) {
+    jobTitleInput.value = detectedJobInfo.jobTitle;
+  }
+
+  showDetectedJobInfoPreview(detectedJobInfo);
+}
+
+function showDetectedJobInfoPreview(info) {
+  if (!info) {
+    jobInfoPreview.classList.add("hidden");
+    jobInfoPreview.innerHTML = "";
+    return;
+  }
+
+  jobInfoPreview.classList.remove("hidden");
+
+  jobInfoPreview.innerHTML = `
+    <strong>Detected Job Info</strong><br>
+    Company: ${info.companyName || "Not detected"}<br>
+    Job Title: ${info.jobTitle || "Not detected"}<br>
+    Page Title: ${info.pageTitle || "N/A"}<br>
+    Host: ${info.hostname || "N/A"}
+  `;
+}
+
 function setStatus(message, type = "success") {
   statusDiv.className = type;
   statusDiv.innerText = message;
@@ -125,6 +159,10 @@ async function loadCurrentUrl() {
   try {
     currentPageData = await getJobPageData();
     currentUrlDiv.innerText = currentPageData.url;
+
+    if (currentPageData.detectedJobInfo) {
+      applyDetectedJobInfo(currentPageData.detectedJobInfo);
+    }
   } catch (error) {
     currentUrlDiv.innerText = "Could not read current page.";
     setStatus(
@@ -319,6 +357,33 @@ async function copyToClipboard(text, successMessage) {
   await navigator.clipboard.writeText(text);
   setStatus(successMessage, "success");
 }
+
+detectJobInfoBtn.addEventListener("click", async () => {
+  try {
+    setStatus("Detecting job info...", "success");
+
+    currentPageData = await getJobPageData();
+
+    if (!currentPageData.detectedJobInfo) {
+      setStatus("Could not detect job info from this page.", "error");
+      return;
+    }
+
+    // For manual button click, overwrite existing values
+    companyNameInput.value = currentPageData.detectedJobInfo.companyName || "";
+    jobTitleInput.value = currentPageData.detectedJobInfo.jobTitle || "";
+
+    showDetectedJobInfoPreview(currentPageData.detectedJobInfo);
+
+    setStatus(
+      "Job info detected. Please review before generating draft.",
+      "success",
+    );
+  } catch (error) {
+    console.error(error);
+    setStatus("Auto-detect error: " + error.message, "error");
+  }
+});
 
 candidateSearchInput.addEventListener("input", () => {
   filterCandidates(candidateSearchInput.value);
