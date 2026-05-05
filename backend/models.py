@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 
 from database import Base
-
+from pydantic import BaseModel
 
 class Candidate(Base):
     __tablename__ = "candidates"
@@ -65,3 +65,24 @@ class Application(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     candidate = relationship("Candidate", back_populates="applications")
+
+class GoogleSheetsSyncLog(Base):
+    __tablename__ = "google_sheets_sync_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    triggered_by = Column(String, nullable=True)
+
+    status_filter = Column(String, nullable=True)
+    created_by_filter = Column(String, nullable=True)
+    candidate_id_filter = Column(Integer, nullable=True)
+    limit_filter = Column(Integer, nullable=True)
+
+    rows_synced = Column(Integer, default=0)
+    rows_updated = Column(Integer, default=0)
+    rows_skipped = Column(Integer, default=0)
+
+    sync_status = Column(String, default="Success")
+    error_message = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)

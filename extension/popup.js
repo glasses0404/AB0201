@@ -23,6 +23,9 @@ const customBidderNameInput = document.getElementById("customBidderName");
 const candidateSearchInput = document.getElementById("candidateSearch");
 const candidateSelect = document.getElementById("candidateSelect");
 const candidatePreview = document.getElementById("candidatePreview");
+const syncLogsBtn = document.getElementById("syncLogsBtn");
+const syncLogsBox = document.getElementById("syncLogsBox");
+const syncLogsOutput = document.getElementById("syncLogsOutput");
 
 const toggleCreateCandidateBtn = document.getElementById(
   "toggleCreateCandidateBtn",
@@ -183,6 +186,11 @@ async function syncApplicationsToGoogleSheets(filters = {}) {
   const params = new URLSearchParams();
 
   params.set("limit", "100");
+  const bidderName = getSelectedBidderName();
+
+  if (bidderName) {
+    params.set("triggered_by", bidderName);
+  }
 
   if (filters.status) {
     params.set("status", filters.status);
@@ -329,6 +337,42 @@ function renderRecentApplications(applications) {
       }
     });
   });
+}
+
+async function getGoogleSheetsSyncLogs() {
+  const response = await fetch(
+    `${API_BASE_URL}/sync/google-sheets/logs?limit=10`,
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
+
+  return await response.json();
+}
+
+function formatSyncLogs(logs) {
+  if (!logs.length) {
+    return "No sync logs found.";
+  }
+
+  return logs
+    .map((log) => {
+      return `
+#${log.id} - ${log.sync_status}
+Triggered By: ${log.triggered_by || "Unknown"}
+Created At: ${formatDateTime(log.created_at)}
+New Rows: ${log.rows_synced}
+Updated Rows: ${log.rows_updated}
+Skipped Rows: ${log.rows_skipped}
+Status Filter: ${log.status_filter || "All"}
+Bidder Filter: ${log.created_by_filter || "All"}
+Candidate Filter: ${log.candidate_id_filter || "All"}
+Error: ${log.error_message || "-"}
+`.trim();
+    })
+    .join("\n\n----------------------\n\n");
 }
 
 async function loadApplicationIntoResultBox(applicationId) {
@@ -906,12 +950,30 @@ if (syncGoogleSheetsBtn) {
       const result = await syncApplicationsToGoogleSheets(filters);
 
       setStatus(
-        `Google Sheets sync complete. Synced: ${result.rows_synced}, Skipped duplicates: ${result.rows_skipped}`,
+        `Google Sheets sync complete. New: ${result.rows_synced}, Updated: ${result.rows_updated}, Log ID: ${result.sync_log_id}`,
         "success",
       );
     } catch (error) {
       console.error(error);
       setStatus("Google Sheets sync error: " + error.message, "error");
+    }
+  });
+}
+
+if (syncLogsBtn) {
+  syncLogsBtn.addEventListener("click", async () => {
+    try {
+      setStatus("Loading sync logs...", "success");
+
+      const logs = await getGoogleSheetsSyncLogs();
+
+      syncLogsBox.classList.remove("hidden");
+      syncLogsOutput.innerText = formatSyncLogs(logs);
+
+      setStatus("Sync logs loaded.", "success");
+    } catch (error) {
+      console.error(error);
+      setStatus("Sync logs error: " + error.message, "error");
     }
   });
 }

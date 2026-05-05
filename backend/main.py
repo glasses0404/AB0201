@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from database import Base, engine, get_db
-from models import Candidate, Application
+from models import Candidate, Application, GoogleSheetsSyncLog
 from schemas import (
     CandidateCreate,
     CandidateResponse,
@@ -19,7 +19,8 @@ from schemas import (
     JobExtractRequest,
     JobExtractResponse,
     ApplicationStatusUpdate,
-    ApplicationStatusOverrideUpdate
+    ApplicationStatusOverrideUpdate,
+    GoogleSheetsSyncLogResponse
 )
 
 from services.url_service import preserve_original_url, create_canonical_url
@@ -592,8 +593,76 @@ def sync_applications_google_sheets(
     created_by: str | None = None,
     candidate_id: int | None = None,
     limit: int = 100,
+    triggered_by: str | None = None,
     db: Session = Depends(get_db)
 ):
+    query = db.query(Application)
+
+    if status:
+        query = query.filter(Application.status == status)
+
+    if created_by:
+        query = query.filter(Application.created_by == created_by)
+
+    if candidate_id:
+        query = query.filter(Application.candidate_id == candidate_id)
+
+    applications = query.order_by(Application.created_at.desc()).limit(limit).all()
+
+    sync_log = GoogleSheetsSyncLog(
+        triggered_by=triggered_by or created_by or "Unknown",
+        status_filter=status,
+        created_by_filter=created_by,
+        candidate_id_filter=candidate_id,
+        limit_filter=limit,
+        sync_status="Started"
+    )
+
+    db.add(sync_log)
+    db.commit()
+    db.refresh(sync_log)
+
+    try:
+        result = sync_applications_to_sheet(applications)
+
+        sync_log.rows_synced = result["rows_synced"]
+        sync_log.rows_updated = result["rows_updated"]
+        sync_log.rows_skipped = result["rows_skipped"]
+        sync_log.sync_status = "Success"
+        sync_log.error_message = None
+
+        db.commit()
+        db.refresh(sync_log)
+
+        return {
+            "message": "Applications synced to Google Sheets",
+            "sync_log_id": sync_log.id,
+            "filters": {
+                "status": status,
+                "created_by": created_by,
+                "candidate_id": candidate_id,
+                "limit": limit,
+                "triggered_by": triggered_by
+            },
+            "rows_synced": result["rows_synced"],
+            "rows_updated": result["rows_updated"],
+            "rows_skipped": result["rows_skipped"],
+            "appended_application_ids": result["appended_application_ids"],
+            "updated_application_ids": result["updated_application_ids"],
+            "worksheet": result["worksheet"]
+        }
+
+    except Exception as error:
+        sync_log.sync_status = "Failed"
+        sync_log.error_message = str(error)
+
+        db.commit()
+        db.refresh(sync_log)
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Google Sheets sync failed: {str(error)}"
+        )
     query = db.query(Application)
 
     if status:
@@ -618,5 +687,20 @@ def sync_applications_google_sheets(
             "limit": limit
         },
         "rows_synced": result["rows_synced"],
+        "rows_updated": result["rows_updated"],
+        "rows_skipped": result["rows_skipped"],
+        "appended_application_ids": result["appended_application_ids"],
+        "updated_application_ids": result["updated_application_ids"],
         "worksheet": result["worksheet"]
     }
+
+@app.get("/sync/google-sheets/logs", response_model=list[GoogleSheetsSyncLogResponse])
+def list_google_sheets_sync_logs(
+    limit: int = 25,
+    db: Session = Depends(get_db)
+):
+    logs = db.query(GoogleSheetsSyncLog).order_by(
+        GoogleSheetsSyncLog.created_at.desc()
+    ).limit(limit).all()
+
+    return logs

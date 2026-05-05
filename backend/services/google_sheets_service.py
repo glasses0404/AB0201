@@ -9,7 +9,6 @@ SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets"
 ]
 
-
 APPLICATION_HEADERS = [
     "application_id",
     "candidate_id",
@@ -83,28 +82,36 @@ def get_or_create_worksheet(spreadsheet, worksheet_name: str, headers: list[str]
     return worksheet
 
 
-def get_existing_application_ids(worksheet) -> set[str]:
+def get_existing_application_row_map(worksheet) -> dict[str, int]:
     """
-    Reads application_id column from Google Sheet.
-    Assumes application_id is column A.
+    Returns:
+    {
+      "1": 2,
+      "2": 3
+    }
+
+    Key = application_id
+    Value = Google Sheet row number
+
+    Row 1 is header, so data starts at row 2.
     """
     all_values = worksheet.get_all_values()
 
+    row_map = {}
+
     if len(all_values) <= 1:
-        return set()
+        return row_map
 
-    existing_ids = set()
-
-    for row in all_values[1:]:
+    for index, row in enumerate(all_values[1:], start=2):
         if not row:
             continue
 
         application_id = str(row[0]).strip()
 
         if application_id:
-            existing_ids.add(application_id)
+            row_map[application_id] = index
 
-    return existing_ids
+    return row_map
 
 
 def application_to_row(app_item):
@@ -143,19 +150,32 @@ def sync_applications_to_sheet(applications: list):
         APPLICATION_HEADERS
     )
 
-    existing_application_ids = get_existing_application_ids(worksheet)
+    existing_row_map = get_existing_application_row_map(worksheet)
 
     rows_to_append = []
-    skipped_existing_ids = []
+    rows_updated = 0
+    updated_application_ids = []
+    appended_application_ids = []
 
     for app_item in applications:
         application_id = str(app_item.id)
+        row_data = application_to_row(app_item)
 
-        if application_id in existing_application_ids:
-            skipped_existing_ids.append(application_id)
-            continue
+        if application_id in existing_row_map:
+            row_number = existing_row_map[application_id]
+            end_column_letter = "Q"
 
-        rows_to_append.append(application_to_row(app_item))
+            worksheet.update(
+                f"A{row_number}:{end_column_letter}{row_number}",
+                [row_data],
+                value_input_option="USER_ENTERED"
+            )
+
+            rows_updated += 1
+            updated_application_ids.append(application_id)
+        else:
+            rows_to_append.append(row_data)
+            appended_application_ids.append(application_id)
 
     if rows_to_append:
         worksheet.append_rows(rows_to_append, value_input_option="USER_ENTERED")
@@ -163,6 +183,8 @@ def sync_applications_to_sheet(applications: list):
     return {
         "worksheet": "Applications",
         "rows_synced": len(rows_to_append),
-        "rows_skipped": len(skipped_existing_ids),
-        "skipped_application_ids": skipped_existing_ids
+        "rows_updated": rows_updated,
+        "rows_skipped": 0,
+        "appended_application_ids": appended_application_ids,
+        "updated_application_ids": updated_application_ids
     }

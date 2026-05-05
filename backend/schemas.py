@@ -81,3 +81,23 @@ class ApplicationStatusOverrideUpdate(BaseModel):
     override_code: Optional[str] = None
     override_reason: Optional[str] = None
     override_by: Optional[str] = None
+
+class GoogleSheetsSyncLogResponse(BaseModel):
+    id: int
+    triggered_by: Optional[str] = None
+
+    status_filter: Optional[str] = None
+    created_by_filter: Optional[str] = None
+    candidate_id_filter: Optional[int] = None
+    limit_filter: Optional[int] = None
+
+    rows_synced: int
+    rows_updated: int
+    rows_skipped: int
+
+    sync_status: str
+    error_message: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
