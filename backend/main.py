@@ -4,13 +4,21 @@ from sqlalchemy.orm import Session
 
 from database import Base, engine, get_db
 from models import Candidate, Application
-from schemas import CandidateCreate, CandidateResponse, ApplicationCreate, ApplicationResponse
+from schemas import (
+    CandidateCreate,
+    CandidateResponse,
+    ApplicationCreate,
+    ApplicationResponse,
+    JobExtractRequest,
+    JobExtractResponse
+)
 
 from services.url_service import preserve_original_url, create_canonical_url
 from services.duplicate_service import check_duplicate
 from services.match_service import calculate_match_score
 from services.cover_letter_service import generate_cover_letter
 from services.screening_service import generate_screening_answers
+from services.job_extract_service import extract_job_info_with_ai
 
 Base.metadata.create_all(bind=engine)
 
@@ -52,7 +60,21 @@ def get_candidate(candidate_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Candidate not found")
 
     return candidate
+    
+@app.post("/extract-job-info", response_model=JobExtractResponse)
+def extract_job_info(req: JobExtractRequest):
+    result = extract_job_info_with_ai(
+        url=req.url,
+        page_title=req.page_title,
+        page_text=req.page_text
+    )
 
+    return {
+        "company_name": result.get("company_name"),
+        "job_title": result.get("job_title"),
+        "confidence": result.get("confidence", "Low"),
+        "reason": result.get("reason")
+    }
 
 @app.post("/applications", response_model=ApplicationResponse)
 def create_application(app_req: ApplicationCreate, db: Session = Depends(get_db)):

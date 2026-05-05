@@ -52,3 +52,15 @@ class ApplicationResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class JobExtractRequest(BaseModel):
+    url: str
+    page_title: str
+    page_text: str
+
+
+class JobExtractResponse(BaseModel):
+    company_name: Optional[str] = None
+    job_title: Optional[str] = None
+    confidence: str
+    reason: Optional[str] = None

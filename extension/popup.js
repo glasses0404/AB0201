@@ -30,6 +30,7 @@ const newResumeTextInput = document.getElementById("newResumeText");
 const companyNameInput = document.getElementById("companyName");
 const jobTitleInput = document.getElementById("jobTitle");
 const detectJobInfoBtn = document.getElementById("detectJobInfoBtn");
+const aiDetectJobInfoBtn = document.getElementById("aiDetectJobInfoBtn");
 const jobInfoPreview = document.getElementById("jobInfoPreview");
 const screeningQuestionsInput = document.getElementById("screeningQuestions");
 const currentUrlDiv = document.getElementById("currentUrl");
@@ -358,6 +359,67 @@ async function copyToClipboard(text, successMessage) {
   setStatus(successMessage, "success");
 }
 
+async function aiExtractJobInfo(pageData) {
+  const response = await fetch(`${API_BASE_URL}/extract-job-info`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      url: pageData.url,
+      page_title: pageData.title,
+      page_text: pageData.pageText,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
+
+  return await response.json();
+}
+
+function showAiJobInfoPreview(info) {
+  jobInfoPreview.classList.remove("hidden");
+
+  jobInfoPreview.innerHTML = `
+    <strong>AI Detected Job Info</strong><br>
+    Company: ${info.company_name || "Not detected"}<br>
+    Job Title: ${info.job_title || "Not detected"}<br>
+    Confidence: ${info.confidence || "Low"}<br>
+    Reason: ${info.reason || "N/A"}
+  `;
+}
+
+aiDetectJobInfoBtn.addEventListener("click", async () => {
+  try {
+    setStatus("AI is detecting job info...", "success");
+
+    currentPageData = await getJobPageData();
+
+    const result = await aiExtractJobInfo(currentPageData);
+
+    if (result.company_name) {
+      companyNameInput.value = result.company_name;
+    }
+
+    if (result.job_title) {
+      jobTitleInput.value = result.job_title;
+    }
+
+    showAiJobInfoPreview(result);
+
+    setStatus(
+      "AI job info detection completed. Please review before generating.",
+      "success",
+    );
+  } catch (error) {
+    console.error(error);
+    setStatus("AI detect error: " + error.message, "error");
+  }
+});
+
 detectJobInfoBtn.addEventListener("click", async () => {
   try {
     setStatus("Detecting job info...", "success");
@@ -447,12 +509,38 @@ captureBtn.addEventListener("click", async () => {
     resultBox.classList.add("hidden");
 
     const candidateId = getSelectedCandidateId();
-    const companyName = companyNameInput.value.trim();
-    const jobTitle = jobTitleInput.value.trim();
+    let companyName = companyNameInput.value.trim();
+    let jobTitle = jobTitleInput.value.trim();
 
-    if (!candidateId || !companyName || !jobTitle) {
+    if (!candidateId) {
+      setStatus("Please select a candidate.", "error");
+      return;
+    }
+
+    if (!companyName || !jobTitle) {
       setStatus(
-        "Please select Candidate, Company Name, and Job Title.",
+        "Company or job title missing. Running AI detection...",
+        "success",
+      );
+
+      const extracted = await aiExtractJobInfo(currentPageData);
+
+      if (extracted.company_name) {
+        companyName = extracted.company_name;
+        companyNameInput.value = companyName;
+      }
+
+      if (extracted.job_title) {
+        jobTitle = extracted.job_title;
+        jobTitleInput.value = jobTitle;
+      }
+
+      showAiJobInfoPreview(extracted);
+    }
+
+    if (!companyName || !jobTitle) {
+      setStatus(
+        "Could not detect Company Name or Job Title. Please enter them manually.",
         "error",
       );
       return;
