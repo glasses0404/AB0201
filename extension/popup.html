@@ -295,6 +295,21 @@
         <strong id="applicationStatus">-</strong>
       </div>
 
+      <label>Update Status</label>
+      <select id="statusSelect">
+        <option value="Draft Generated">Draft Generated</option>
+        <option value="Needs Review">Needs Review</option>
+        <option value="Approved">Approved</option>
+        <option value="Submitted">Submitted</option>
+        <option value="Duplicate">Duplicate</option>
+        <option value="Skipped - Low Match">Skipped - Low Match</option>
+        <option value="Failed">Failed</option>
+      </select>
+
+      <button id="updateStatusBtn" class="secondary">
+        Update Application Status
+      </button>
+
       <label>Cover Letter</label>
       <div id="coverLetterOutput" class="output-text"></div>
       <button id="copyCoverLetterBtn" class="copy-btn">

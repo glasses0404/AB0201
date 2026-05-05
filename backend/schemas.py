@@ -64,3 +64,6 @@ class JobExtractResponse(BaseModel):
     job_title: Optional[str] = None
     confidence: str
     reason: Optional[str] = None
+
+class ApplicationStatusUpdate(BaseModel):
+    status: str

@@ -43,6 +43,8 @@ const applicationIdEl = document.getElementById("applicationId");
 const matchScoreEl = document.getElementById("matchScore");
 const duplicateStatusEl = document.getElementById("duplicateStatus");
 const applicationStatusEl = document.getElementById("applicationStatus");
+const statusSelect = document.getElementById("statusSelect");
+const updateStatusBtn = document.getElementById("updateStatusBtn");
 const coverLetterOutput = document.getElementById("coverLetterOutput");
 const screeningAnswersOutput = document.getElementById(
   "screeningAnswersOutput",
@@ -342,6 +344,10 @@ function displayApplicationDraft(result) {
   duplicateStatusEl.innerText = result.duplicate_status || "-";
   applicationStatusEl.innerText = result.status || "-";
 
+  if (statusSelect && result.status) {
+    statusSelect.value = result.status;
+  }
+
   coverLetterOutput.innerText =
     result.cover_letter || "No cover letter generated.";
   screeningAnswersOutput.innerText =
@@ -392,6 +398,28 @@ function showAiJobInfoPreview(info) {
   `;
 }
 
+async function updateApplicationStatus(applicationId, status) {
+  const response = await fetch(
+    `${API_BASE_URL}/applications/${applicationId}/status`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        status,
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
+
+  return await response.json();
+}
+
 aiDetectJobInfoBtn.addEventListener("click", async () => {
   try {
     setStatus("AI is detecting job info...", "success");
@@ -417,6 +445,31 @@ aiDetectJobInfoBtn.addEventListener("click", async () => {
   } catch (error) {
     console.error(error);
     setStatus("AI detect error: " + error.message, "error");
+  }
+});
+
+updateStatusBtn.addEventListener("click", async () => {
+  try {
+    if (!latestApplicationDraft || !latestApplicationDraft.id) {
+      setStatus("No application draft selected.", "error");
+      return;
+    }
+
+    const newStatus = statusSelect.value;
+
+    setStatus("Updating application status...", "success");
+
+    const updatedApplication = await updateApplicationStatus(
+      latestApplicationDraft.id,
+      newStatus,
+    );
+
+    displayApplicationDraft(updatedApplication);
+
+    setStatus(`Status updated to: ${newStatus}`, "success");
+  } catch (error) {
+    console.error(error);
+    setStatus("Status update error: " + error.message, "error");
   }
 });
 

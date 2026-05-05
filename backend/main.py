@@ -10,7 +10,8 @@ from schemas import (
     ApplicationCreate,
     ApplicationResponse,
     JobExtractRequest,
-    JobExtractResponse
+    JobExtractResponse,
+    ApplicationStatusUpdate
 )
 
 from services.url_service import preserve_original_url, create_canonical_url
@@ -60,7 +61,7 @@ def get_candidate(candidate_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Candidate not found")
 
     return candidate
-    
+
 @app.post("/extract-job-info", response_model=JobExtractResponse)
 def extract_job_info(req: JobExtractRequest):
     result = extract_job_info_with_ai(
@@ -164,5 +165,36 @@ def get_application(application_id: int, db: Session = Depends(get_db)):
 
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
+
+    return application
+
+@app.patch("/applications/{application_id}/status", response_model=ApplicationResponse)
+def update_application_status(
+    application_id: int,
+    status_update: ApplicationStatusUpdate,
+    db: Session = Depends(get_db)
+):
+    allowed_statuses = {
+        "Draft Generated",
+        "Needs Review",
+        "Approved",
+        "Submitted",
+        "Duplicate",
+        "Skipped - Low Match",
+        "Failed"
+    }
+
+    if status_update.status not in allowed_statuses:
+        raise HTTPException(status_code=400, detail="Invalid application status")
+
+    application = db.query(Application).filter(Application.id == application_id).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    application.status = status_update.status
+
+    db.commit()
+    db.refresh(application)
 
     return application
