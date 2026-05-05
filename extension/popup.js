@@ -37,6 +37,9 @@ const currentUrlDiv = document.getElementById("currentUrl");
 const captureBtn = document.getElementById("captureBtn");
 const autofillBtn = document.getElementById("autofillBtn");
 const statusDiv = document.getElementById("status");
+const dailyReportBtn = document.getElementById("dailyReportBtn");
+const dailyReportBox = document.getElementById("dailyReportBox");
+const dailyReportOutput = document.getElementById("dailyReportOutput");
 
 const resultBox = document.getElementById("resultBox");
 const applicationIdEl = document.getElementById("applicationId");
@@ -90,6 +93,68 @@ function buildCandidatePayload() {
     expected_salary: newExpectedSalaryInput.value.trim() || null,
     resume_text: newResumeTextInput.value.trim(),
   };
+}
+
+function getTodayDateString() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+async function getDailyReport(reportDate) {
+  const response = await fetch(
+    `${API_BASE_URL}/reports/daily?report_date=${reportDate}`,
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
+
+  return await response.json();
+}
+
+function formatDailyReport(report) {
+  const summary = report.summary || {};
+  const byBidder = report.by_bidder || {};
+  const byCandidate = report.by_candidate || {};
+
+  const bidderLines =
+    Object.entries(byBidder)
+      .map(([name, count]) => `- ${name}: ${count}`)
+      .join("\n") || "- No bidder data";
+
+  const candidateLines =
+    Object.entries(byCandidate)
+      .map(([name, count]) => `- ${name}: ${count}`)
+      .join("\n") || "- No candidate data";
+
+  const statusLines =
+    Object.entries(summary.status_counts_created_today || {})
+      .map(([status, count]) => `- ${status}: ${count}`)
+      .join("\n") || "- No status data";
+
+  return `
+Date: ${report.report_date}
+
+Summary:
+- Total Created: ${summary.total_created || 0}
+- Total Submitted: ${summary.total_submitted || 0}
+- Low Match: ${summary.total_low_match || 0}
+- Duplicates: ${summary.total_duplicates || 0}
+
+Status:
+${statusLines}
+
+By Bidder:
+${bidderLines}
+
+By Candidate:
+${candidateLines}
+`.trim();
 }
 
 async function createCandidate(payload) {
@@ -424,6 +489,23 @@ async function updateApplicationStatus(applicationId, status) {
 
   return await response.json();
 }
+
+dailyReportBtn.addEventListener("click", async () => {
+  try {
+    setStatus("Loading today report...", "success");
+
+    const today = getTodayDateString();
+    const report = await getDailyReport(today);
+
+    dailyReportBox.classList.remove("hidden");
+    dailyReportOutput.innerText = formatDailyReport(report);
+
+    setStatus("Today report loaded.", "success");
+  } catch (error) {
+    console.error(error);
+    setStatus("Daily report error: " + error.message, "error");
+  }
+});
 
 aiDetectJobInfoBtn.addEventListener("click", async () => {
   try {
