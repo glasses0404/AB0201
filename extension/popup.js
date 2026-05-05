@@ -1,5 +1,8 @@
 const API_BASE_URL = "http://127.0.0.1:8000";
 
+const bidderNameSelect = document.getElementById("bidderName");
+const customBidderNameInput = document.getElementById("customBidderName");
+
 const candidateSearchInput = document.getElementById("candidateSearch");
 const candidateSelect = document.getElementById("candidateSelect");
 const candidatePreview = document.getElementById("candidatePreview");
@@ -93,6 +96,16 @@ function buildCandidatePayload() {
     expected_salary: newExpectedSalaryInput.value.trim() || null,
     resume_text: newResumeTextInput.value.trim(),
   };
+}
+
+function getSelectedBidderName() {
+  const selected = bidderNameSelect.value;
+
+  if (selected === "Other") {
+    return customBidderNameInput.value.trim();
+  }
+
+  return selected;
 }
 
 function getTodayDateString() {
@@ -490,6 +503,44 @@ async function updateApplicationStatus(applicationId, status) {
   return await response.json();
 }
 
+function saveBidderName() {
+  const selected = bidderNameSelect.value;
+  const custom = customBidderNameInput.value.trim();
+
+  chrome.storage.local.set({
+    bidderName: selected,
+    customBidderName: custom,
+  });
+}
+
+function loadSavedBidderName() {
+  chrome.storage.local.get(["bidderName", "customBidderName"], (result) => {
+    if (result.bidderName) {
+      bidderNameSelect.value = result.bidderName;
+    }
+
+    if (result.bidderName === "Other") {
+      customBidderNameInput.classList.remove("hidden");
+      customBidderNameInput.value = result.customBidderName || "";
+    }
+  });
+}
+
+bidderNameSelect.addEventListener("change", () => {
+  if (bidderNameSelect.value === "Other") {
+    customBidderNameInput.classList.remove("hidden");
+  } else {
+    customBidderNameInput.classList.add("hidden");
+    customBidderNameInput.value = "";
+  }
+
+  saveBidderName();
+});
+
+customBidderNameInput.addEventListener("input", () => {
+  saveBidderName();
+});
+
 dailyReportBtn.addEventListener("click", async () => {
   try {
     setStatus("Loading today report...", "success");
@@ -648,9 +699,15 @@ captureBtn.addEventListener("click", async () => {
     setStatus("Generating application draft...", "success");
     resultBox.classList.add("hidden");
 
+    const bidderName = getSelectedBidderName();
     const candidateId = getSelectedCandidateId();
     let companyName = companyNameInput.value.trim();
     let jobTitle = jobTitleInput.value.trim();
+
+    if (!bidderName) {
+      setStatus("Please select or enter bidder name.", "error");
+      return;
+    }
 
     if (!candidateId) {
       setStatus("Please select a candidate.", "error");
@@ -699,7 +756,7 @@ captureBtn.addEventListener("click", async () => {
       original_job_url: currentPageData.url,
       job_description: currentPageData.pageText,
       screening_questions: screeningQuestions,
-      created_by: "Chrome Extension",
+      created_by: bidderName,
     };
 
     const response = await fetch(`${API_BASE_URL}/applications`, {
@@ -767,5 +824,6 @@ copyScreeningAnswersBtn.addEventListener("click", async () => {
   );
 });
 
+loadSavedBidderName();
 loadCurrentUrl();
 loadCandidates();
