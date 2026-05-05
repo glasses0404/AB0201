@@ -1,5 +1,8 @@
 const API_BASE_URL = "http://127.0.0.1:8000";
 
+const slackLogsBtn = document.getElementById("slackLogsBtn");
+const slackLogsBox = document.getElementById("slackLogsBox");
+const slackLogsOutput = document.getElementById("slackLogsOutput");
 const syncGoogleSheetsBtn = document.getElementById("syncGoogleSheetsBtn");
 const recentApplicationsBtn = document.getElementById("recentApplicationsBtn");
 const syncTodayGoogleSheetsBtn = document.getElementById(
@@ -360,9 +363,49 @@ function renderRecentApplications(applications) {
   });
 }
 
+async function getSlackReportLogs() {
+  const response = await fetch(`${API_BASE_URL}/slack/logs?limit=10`);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
+
+  return await response.json();
+}
+
+function formatSlackLogs(logs) {
+  if (!logs.length) {
+    return "No Slack report logs found.";
+  }
+
+  return logs
+    .map((log) => {
+      return `
+#${log.id} - ${log.slack_status}
+Triggered By: ${log.triggered_by || "Unknown"}
+Report Date: ${log.report_date}
+Created At: ${formatDateTime(log.created_at)}
+Total Created: ${log.total_created}
+Total Submitted: ${log.total_submitted}
+Low Match: ${log.total_low_match}
+Duplicates: ${log.total_duplicates}
+Slack Status Code: ${log.slack_status_code || "-"}
+Error: ${log.error_message || "-"}
+`.trim();
+    })
+    .join("\n\n----------------------\n\n");
+}
+
 async function sendSlackDailyReport(reportDate) {
   const params = new URLSearchParams();
   params.set("report_date", reportDate);
+
+  const bidderName = getSelectedBidderName();
+
+  if (bidderName) {
+    params.set("triggered_by", bidderName);
+  }
 
   const response = await fetch(
     `${API_BASE_URL}/slack/daily-report?${params.toString()}`,
@@ -999,6 +1042,24 @@ function getOverrideData() {
   };
 }
 
+if (slackLogsBtn) {
+  slackLogsBtn.addEventListener("click", async () => {
+    try {
+      setStatus("Loading Slack logs...", "success");
+
+      const logs = await getSlackReportLogs();
+
+      slackLogsBox.classList.remove("hidden");
+      slackLogsOutput.innerText = formatSlackLogs(logs);
+
+      setStatus("Slack logs loaded.", "success");
+    } catch (error) {
+      console.error(error);
+      setStatus("Slack logs error: " + error.message, "error");
+    }
+  });
+}
+
 if (syncDashboardBtn) {
   syncDashboardBtn.addEventListener("click", async () => {
     try {
@@ -1027,7 +1088,7 @@ if (sendSlackDailyReportBtn) {
       const result = await sendSlackDailyReport(today);
 
       setStatus(
-        `Slack report sent. Created: ${result.summary.total_created}, Submitted: ${result.summary.total_submitted}`,
+        `Slack report sent. Created: ${result.summary.total_created}, Submitted: ${result.summary.total_submitted}, Log ID: ${result.slack_log_id}`,
         "success",
       );
     } catch (error) {

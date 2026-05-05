@@ -89,3 +89,22 @@ class GoogleSheetsSyncLog(Base):
     error_message = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class SlackReportLog(Base):
+    __tablename__ = "slack_report_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    report_date = Column(String, nullable=False)
+    triggered_by = Column(String, nullable=True)
+
+    total_created = Column(Integer, default=0)
+    total_submitted = Column(Integer, default=0)
+    total_low_match = Column(Integer, default=0)
+    total_duplicates = Column(Integer, default=0)
+
+    slack_status = Column(String, default="Started")
+    slack_status_code = Column(Integer, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)

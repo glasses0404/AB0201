@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from database import Base, engine, get_db
-from models import Candidate, Application, GoogleSheetsSyncLog
+from models import Candidate, Application, GoogleSheetsSyncLog, SlackReportLog
 from schemas import (
     CandidateCreate,
     CandidateResponse,
@@ -19,7 +19,8 @@ from schemas import (
     JobExtractResponse,
     ApplicationStatusUpdate,
     ApplicationStatusOverrideUpdate,
-    GoogleSheetsSyncLogResponse
+    GoogleSheetsSyncLogResponse,
+    SlackReportLogResponse
 )
 
 from services.url_service import preserve_original_url, create_canonical_url
@@ -773,18 +774,66 @@ def sync_google_sheets_dashboard(
 @app.post("/slack/daily-report")
 def send_slack_daily_report(
     report_date: str,
+    triggered_by: str | None = None,
     db: Session = Depends(get_db)
 ):
     report_data = build_daily_report_data(report_date, db)
+    summary = report_data.get("summary", {})
 
-    slack_message = format_daily_report_for_slack(report_data)
+    slack_log = SlackReportLog(
+        report_date=report_date,
+        triggered_by=triggered_by or "Unknown",
+        total_created=summary.get("total_created", 0),
+        total_submitted=summary.get("total_submitted", 0),
+        total_low_match=summary.get("total_low_match", 0),
+        total_duplicates=summary.get("total_duplicates", 0),
+        slack_status="Started"
+    )
 
-    result = send_slack_message(slack_message)
+    db.add(slack_log)
+    db.commit()
+    db.refresh(slack_log)
 
-    return {
-        "message": "Daily report sent to Slack",
-        "report_date": report_date,
-        "slack_status": result["status"],
-        "status_code": result["status_code"],
-        "summary": report_data["summary"]
-    }
+    try:
+        slack_message = format_daily_report_for_slack(report_data)
+        result = send_slack_message(slack_message)
+
+        slack_log.slack_status = "Success"
+        slack_log.slack_status_code = result.get("status_code")
+        slack_log.error_message = None
+
+        db.commit()
+        db.refresh(slack_log)
+
+        return {
+            "message": "Daily report sent to Slack",
+            "slack_log_id": slack_log.id,
+            "report_date": report_date,
+            "triggered_by": triggered_by,
+            "slack_status": result["status"],
+            "status_code": result["status_code"],
+            "summary": report_data["summary"]
+        }
+
+    except Exception as error:
+        slack_log.slack_status = "Failed"
+        slack_log.error_message = str(error)
+
+        db.commit()
+        db.refresh(slack_log)
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Slack daily report failed: {str(error)}"
+        )
+
+@app.get("/slack/logs", response_model=list[SlackReportLogResponse])
+def list_slack_report_logs(
+    limit: int = 25,
+    db: Session = Depends(get_db)
+):
+    logs = db.query(SlackReportLog).order_by(
+        SlackReportLog.created_at.desc()
+    ).limit(limit).all()
+
+    return logs

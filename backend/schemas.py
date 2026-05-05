@@ -104,3 +104,23 @@ class GoogleSheetsSyncLogResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class SlackReportLogResponse(BaseModel):
+    id: int
+
+    report_date: str
+    triggered_by: Optional[str] = None
+
+    total_created: int
+    total_submitted: int
+    total_low_match: int
+    total_duplicates: int
+
+    slack_status: str
+    slack_status_code: Optional[int] = None
+    error_message: Optional[str] = None
+
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
