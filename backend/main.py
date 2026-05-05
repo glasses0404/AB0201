@@ -39,6 +39,10 @@ def create_candidate(candidate: CandidateCreate, db: Session = Depends(get_db)):
     db.refresh(new_candidate)
     return new_candidate
 
+@app.get("/candidates", response_model=list[CandidateResponse])
+def list_candidates(db: Session = Depends(get_db)):
+    candidates = db.query(Candidate).order_by(Candidate.created_at.desc()).all()
+    return candidates
 
 @app.get("/candidates/{candidate_id}", response_model=CandidateResponse)
 def get_candidate(candidate_id: int, db: Session = Depends(get_db)):
