@@ -518,6 +518,8 @@ async function runAutobidderPageAnalysis() {
       );
     }
 
+    const atsType = getAtsType();
+
     chrome.storage.local.set({
       latestOnPageApplicationDraft: applicationDraft,
       latestOnPageScreeningAnswers: screeningAnswerResult.answers,
@@ -542,6 +544,7 @@ async function runAutobidderPageAnalysis() {
   <div>
     <strong>Application Draft Created</strong><br><br>
 
+    <strong>ATS:</strong> ${atsType}<br>
     <strong>Company:</strong> ${applicationDraft.company_name}<br>
     <strong>Job Title:</strong> ${applicationDraft.job_title}<br>
     <strong>Match Score:</strong> <span class="${matchClass}">${applicationDraft.match_score}%</span><br>
@@ -576,6 +579,67 @@ async function getSavedResumeFileForCandidateFromStorage(candidateId) {
   });
 }
 
+function detectGreenhouseScreeningFields() {
+  const fields = [];
+
+  const containers = Array.from(
+    document.querySelectorAll(
+      ".field, .custom-question, .application-question, div",
+    ),
+  );
+
+  containers.forEach((container, index) => {
+    const input = container.querySelector(
+      "textarea, input[type='text'], input[type='number'], select",
+    );
+
+    if (!input) return;
+
+    const labelText = container.innerText.replace(/\s+/g, " ").trim();
+
+    if (!labelText || labelText.length < 5 || labelText.length > 800) return;
+
+    const lower = labelText.toLowerCase();
+
+    const looksLikeQuestion =
+      lower.includes("?") ||
+      lower.includes("authorized") ||
+      lower.includes("sponsor") ||
+      lower.includes("experience") ||
+      lower.includes("years") ||
+      lower.includes("salary") ||
+      lower.includes("relocate") ||
+      lower.includes("why") ||
+      lower.includes("describe") ||
+      lower.includes("gender") ||
+      lower.includes("veteran") ||
+      lower.includes("disability");
+
+    if (!looksLikeQuestion) return;
+
+    const fieldId = `greenhouse-field-${index}`;
+    input.setAttribute("data-autobidder-field-id", fieldId);
+
+    let options = [];
+
+    if (input.tagName.toLowerCase() === "select") {
+      options = Array.from(input.options)
+        .map((option) => option.textContent.trim())
+        .filter(Boolean);
+    }
+
+    fields.push({
+      fieldId,
+      fieldType: input.tagName.toLowerCase(),
+      inputType: input.getAttribute("type") || "",
+      label: labelText,
+      options,
+    });
+  });
+
+  return fields;
+}
+
 async function runAutobidderAutofillFromPanel() {
   const resultBox = document.getElementById("autobidder-result-box");
 
@@ -595,8 +659,16 @@ async function runAutobidderAutofillFromPanel() {
     ).then((r) => r.json());
 
     // 1. Basic profile autofill
-    autofillBasicFields(candidate);
+    const atsType = getAtsType();
 
+    let basicFillMessage = "Basic profile fields filled.";
+
+    if (atsType === "greenhouse") {
+      const greenhouseResult = fillGreenhouseBasicFields(candidate);
+      basicFillMessage = `Greenhouse fields filled: ${greenhouseResult.filledCount}`;
+    } else {
+      autofillBasicFields(candidate);
+    }
     // 2. Resume upload
     let resumeMessage = "No saved resume found for this candidate.";
 
@@ -895,13 +967,18 @@ function isLikelyResumeUploadInput(input) {
   const accept = (input.getAttribute("accept") || "").toLowerCase();
   const name = (input.getAttribute("name") || "").toLowerCase();
   const id = (input.getAttribute("id") || "").toLowerCase();
+  const aria = (input.getAttribute("aria-label") || "").toLowerCase();
+  const parentText =
+    input.closest("div, section, fieldset")?.innerText?.toLowerCase() || "";
 
-  const combined = `${label} ${accept} ${name} ${id}`.toLowerCase();
+  const combined =
+    `${label} ${accept} ${name} ${id} ${aria} ${parentText}`.toLowerCase();
 
   return (
     combined.includes("resume") ||
     combined.includes("cv") ||
     combined.includes("curriculum") ||
+    combined.includes("attach") ||
     combined.includes("upload") ||
     combined.includes(".pdf") ||
     combined.includes(".doc") ||
@@ -998,7 +1075,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     if (request.type === "DETECT_SCREENING_FIELDS") {
-      const fields = detectScreeningFields();
+      const atsType = getAtsType();
+
+      const fields =
+        atsType === "greenhouse"
+          ? detectGreenhouseScreeningFields()
+          : detectScreeningFields();
 
       sendResponse({
         success: true,
@@ -1101,3 +1183,93 @@ async function autoDetectAndShowAutobidderPanel() {
 setTimeout(() => {
   autoDetectAndShowAutobidderPanel();
 }, 1800);
+
+function getAtsType() {
+  const host = window.location.hostname.toLowerCase();
+  const url = window.location.href.toLowerCase();
+
+  if (host.includes("greenhouse.io") || url.includes("greenhouse.io")) {
+    return "greenhouse";
+  }
+
+  if (host.includes("lever.co") || url.includes("lever.co")) {
+    return "lever";
+  }
+
+  if (host.includes("ashbyhq.com") || url.includes("ashby")) {
+    return "ashby";
+  }
+
+  if (host.includes("myworkdayjobs.com") || url.includes("workday")) {
+    return "workday";
+  }
+
+  return "generic";
+}
+
+function getInputByPossibleNames(possibleNames) {
+  const fields = Array.from(
+    document.querySelectorAll("input, textarea, select"),
+  );
+
+  return fields.find((field) => {
+    const id = (field.id || "").toLowerCase();
+    const name = (field.name || "").toLowerCase();
+    const aria = (field.getAttribute("aria-label") || "").toLowerCase();
+    const placeholder = (field.getAttribute("placeholder") || "").toLowerCase();
+    const label = findLabelText(field).toLowerCase();
+
+    const combined = `${id} ${name} ${aria} ${placeholder} ${label}`;
+
+    return possibleNames.some((key) => combined.includes(key));
+  });
+}
+
+function fillGreenhouseBasicFields(profile) {
+  const mappings = [
+    {
+      keys: ["first_name", "first name", "firstname"],
+      value: profile.first_name,
+    },
+    {
+      keys: ["last_name", "last name", "lastname"],
+      value: profile.last_name,
+    },
+    {
+      keys: ["email", "email address"],
+      value: profile.email,
+    },
+    {
+      keys: ["phone", "phone number", "mobile"],
+      value: profile.phone,
+    },
+    {
+      keys: ["linkedin", "linkedin profile"],
+      value: profile.linkedin,
+    },
+    {
+      keys: ["github", "github profile"],
+      value: profile.github,
+    },
+    {
+      keys: ["website", "portfolio", "personal website"],
+      value: profile.portfolio,
+    },
+  ];
+
+  let filledCount = 0;
+
+  mappings.forEach((mapping) => {
+    const field = getInputByPossibleNames(mapping.keys);
+
+    if (field && mapping.value) {
+      setNativeValue(field, mapping.value);
+      filledCount += 1;
+    }
+  });
+
+  return {
+    success: true,
+    filledCount,
+  };
+}
