@@ -22,6 +22,7 @@ function createAutobidderFloatingPanel() {
 
       <button id="autobidder-run-analysis-btn">Analyze Job</button>
       <button id="autobidder-autofill-btn">Autofill</button>
+      <button id="autobidder-copy-cover-letter-btn">Copy Cover Letter</button>
 
       <div id="autobidder-result-box"></div>
     </div>
@@ -142,6 +143,27 @@ function createAutobidderFloatingPanel() {
     .getElementById("autobidder-autofill-btn")
     .addEventListener("click", async () => {
       await runAutobidderAutofillFromPanel();
+    });
+
+  document
+    .getElementById("autobidder-copy-cover-letter-btn")
+    .addEventListener("click", async () => {
+      const resultBox = document.getElementById("autobidder-result-box");
+
+      const storageData = await new Promise((resolve) => {
+        chrome.storage.local.get(["latestOnPageApplicationDraft"], resolve);
+      });
+
+      const draft = storageData.latestOnPageApplicationDraft;
+
+      if (!draft || !draft.cover_letter) {
+        resultBox.innerText = "No cover letter found. Click Analyze Job first.";
+        return;
+      }
+
+      await navigator.clipboard.writeText(draft.cover_letter);
+
+      resultBox.innerText = "Cover letter copied to clipboard.";
     });
 }
 
@@ -325,6 +347,93 @@ async function getActiveCandidateFromStorage() {
   });
 }
 
+function base64ToArrayBuffer(base64) {
+  const binaryString = atob(base64);
+  const length = binaryString.length;
+  const bytes = new Uint8Array(length);
+
+  for (let i = 0; i < length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+
+  return bytes.buffer;
+}
+
+function isLikelyResumeUploadInput(input) {
+  if (!input || input.type !== "file") {
+    return false;
+  }
+
+  const label = findLabelText(input);
+  const accept = (input.getAttribute("accept") || "").toLowerCase();
+  const name = (input.getAttribute("name") || "").toLowerCase();
+  const id = (input.getAttribute("id") || "").toLowerCase();
+
+  const combined = `${label} ${accept} ${name} ${id}`.toLowerCase();
+
+  return (
+    combined.includes("resume") ||
+    combined.includes("cv") ||
+    combined.includes("curriculum") ||
+    combined.includes("upload") ||
+    combined.includes(".pdf") ||
+    combined.includes(".doc") ||
+    combined.includes(".docx")
+  );
+}
+
+function findResumeFileInput() {
+  const fileInputs = Array.from(
+    document.querySelectorAll('input[type="file"]'),
+  );
+
+  if (!fileInputs.length) {
+    return null;
+  }
+
+  const resumeInput = fileInputs.find(isLikelyResumeUploadInput);
+
+  if (resumeInput) {
+    return resumeInput;
+  }
+
+  if (fileInputs.length === 1) {
+    return fileInputs[0];
+  }
+
+  return null;
+}
+
+function uploadResumeFileToPage(resumeData) {
+  const input = findResumeFileInput();
+
+  if (!input) {
+    return {
+      success: false,
+      message: "Could not find a resume upload field on this page.",
+    };
+  }
+
+  const arrayBuffer = base64ToArrayBuffer(resumeData.base64Data);
+
+  const file = new File([arrayBuffer], resumeData.fileName, {
+    type: resumeData.fileType || "application/octet-stream",
+  });
+
+  const dataTransfer = new DataTransfer();
+  dataTransfer.items.add(file);
+
+  input.files = dataTransfer.files;
+
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+
+  return {
+    success: true,
+    message: `Resume uploaded: ${resumeData.fileName}`,
+  };
+}
+
 async function postJson(url, payload) {
   const response = await fetch(url, {
     method: "POST",
@@ -414,24 +523,57 @@ async function runAutobidderPageAnalysis() {
       latestOnPageScreeningAnswers: screeningAnswerResult.answers,
     });
 
-    resultBox.innerText = `
-Application Draft Created
+    const screeningPreview = screeningAnswerResult.answers.length
+      ? screeningAnswerResult.answers
+          .map((item, index) => {
+            return `${index + 1}. ${item.question}\nAnswer: ${item.answer}\nConfidence: ${item.confidence}\nManual Review: ${item.manual_review_required ? "Yes" : "No"}`;
+          })
+          .join("\n\n")
+      : "No screening questions detected.";
 
-Company: ${applicationDraft.company_name}
-Job Title: ${applicationDraft.job_title}
-Match Score: ${applicationDraft.match_score}%
-Duplicate: ${applicationDraft.duplicate_status}
-Status: ${applicationDraft.status}
+    const matchClass =
+      Number(applicationDraft.match_score) >= 75
+        ? "autobidder-good"
+        : Number(applicationDraft.match_score) >= 60
+          ? "autobidder-warning"
+          : "autobidder-danger";
 
-Screening Questions Detected: ${screeningFields.length}
+    resultBox.innerHTML = `
+  <div>
+    <strong>Application Draft Created</strong><br><br>
 
-Cover Letter:
-${applicationDraft.cover_letter || "No cover letter generated."}
-`.trim();
+    <strong>Company:</strong> ${applicationDraft.company_name}<br>
+    <strong>Job Title:</strong> ${applicationDraft.job_title}<br>
+    <strong>Match Score:</strong> <span class="${matchClass}">${applicationDraft.match_score}%</span><br>
+    <strong>Duplicate:</strong> ${applicationDraft.duplicate_status}<br>
+    <strong>Status:</strong> ${applicationDraft.status}<br>
+    <strong>Screening Questions:</strong> ${screeningFields.length}<br><br>
+
+    <strong>Screening Answers</strong><br>
+    <pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">${screeningPreview}</pre>
+
+    <strong>Cover Letter</strong><br>
+    <pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">${applicationDraft.cover_letter || "No cover letter generated."}</pre>
+  </div>
+`;
   } catch (error) {
     console.error(error);
     resultBox.innerText = "Autobidder analysis error: " + error.message;
   }
+}
+
+function getResumeStorageKey(candidateId) {
+  return `resume_file_candidate_${candidateId}`;
+}
+
+async function getSavedResumeFileForCandidateFromStorage(candidateId) {
+  const key = getResumeStorageKey(candidateId);
+
+  return new Promise((resolve) => {
+    chrome.storage.local.get([key], (result) => {
+      resolve(result[key] || null);
+    });
+  });
 }
 
 async function runAutobidderAutofillFromPanel() {
@@ -452,16 +594,35 @@ async function runAutobidderAutofillFromPanel() {
       `${AUTOBIDDER_API_BASE_URL}/candidates/${active.candidateId}`,
     ).then((r) => r.json());
 
+    // 1. Basic profile autofill
     autofillBasicFields(candidate);
 
+    // 2. Resume upload
+    let resumeMessage = "No saved resume found for this candidate.";
+
+    const resumeData = await getSavedResumeFileForCandidateFromStorage(
+      active.candidateId,
+    );
+
+    if (resumeData) {
+      const resumeResult = uploadResumeFileToPage(resumeData);
+      resumeMessage = resumeResult.message;
+    }
+
+    // 3. Screening answers
     const storageData = await new Promise((resolve) => {
       chrome.storage.local.get(["latestOnPageScreeningAnswers"], resolve);
     });
 
     const answers = storageData.latestOnPageScreeningAnswers || [];
 
+    let screeningMessage =
+      "No screening answers found. Click Analyze Job first.";
+
     if (answers.length > 0) {
-      fillScreeningAnswers(answers);
+      const fillResult = fillScreeningAnswers(answers);
+
+      screeningMessage = `Screening answers filled: ${fillResult.filled.length}, skipped: ${fillResult.skipped.length}`;
     }
 
     resultBox.innerText = `
@@ -469,9 +630,10 @@ Autofill completed.
 
 Filled:
 - Basic profile fields
-- Screening answers where confidence was high
+- ${resumeMessage}
+- ${screeningMessage}
 
-Please review all fields before submitting.
+Please review every field before submitting.
 `.trim();
   } catch (error) {
     console.error(error);
