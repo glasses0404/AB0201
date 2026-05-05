@@ -55,6 +55,11 @@ class Application(Base):
 
     status = Column(String, default="Draft Generated")
 
+    manager_override_used = Column(String, default="No")
+    manager_override_reason = Column(Text, nullable=True)
+    manager_override_by = Column(String, nullable=True)
+    manager_override_at = Column(DateTime, nullable=True)
+
     created_by = Column(String, nullable=True)
     submitted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

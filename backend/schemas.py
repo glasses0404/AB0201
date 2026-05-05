@@ -53,6 +53,11 @@ class ApplicationResponse(BaseModel):
     submitted_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
 
+    manager_override_used: Optional[str] = None
+    manager_override_reason: Optional[str] = None
+    manager_override_by: Optional[str] = None
+    manager_override_at: Optional[datetime] = None
+
     class Config:
         from_attributes = True
 
@@ -70,3 +75,9 @@ class JobExtractResponse(BaseModel):
 
 class ApplicationStatusUpdate(BaseModel):
     status: str
+
+class ApplicationStatusOverrideUpdate(BaseModel):
+    status: str
+    override_code: Optional[str] = None
+    override_reason: Optional[str] = None
+    override_by: Optional[str] = None

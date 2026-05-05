@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, date, time
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,7 +13,8 @@ from schemas import (
     ApplicationResponse,
     JobExtractRequest,
     JobExtractResponse,
-    ApplicationStatusUpdate
+    ApplicationStatusUpdate,
+    ApplicationStatusOverrideUpdate
 )
 
 from services.url_service import preserve_original_url, create_canonical_url
@@ -162,8 +164,26 @@ def create_application(app_req: ApplicationCreate, db: Session = Depends(get_db)
 
 
 @app.get("/applications")
-def list_applications(db: Session = Depends(get_db)):
-    applications = db.query(Application).order_by(Application.created_at.desc()).all()
+def list_applications(
+    status: str | None = None,
+    created_by: str | None = None,
+    candidate_id: int | None = None,
+    limit: int = 25,
+    db: Session = Depends(get_db)
+):
+    query = db.query(Application)
+
+    if status:
+        query = query.filter(Application.status == status)
+
+    if created_by:
+        query = query.filter(Application.created_by == created_by)
+
+    if candidate_id:
+        query = query.filter(Application.candidate_id == candidate_id)
+
+    applications = query.order_by(Application.created_at.desc()).limit(limit).all()
+
     return applications
 
 
@@ -179,7 +199,7 @@ def get_application(application_id: int, db: Session = Depends(get_db)):
 @app.patch("/applications/{application_id}/status", response_model=ApplicationResponse)
 def update_application_status(
     application_id: int,
-    status_update: ApplicationStatusUpdate,
+    status_update: ApplicationStatusOverrideUpdate,
     db: Session = Depends(get_db)
 ):
     allowed_statuses = {
@@ -200,27 +220,35 @@ def update_application_status(
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    if application.duplicate_status == "Exact Duplicate" and status_update.status == "Submitted":
-        raise HTTPException(
-            status_code=400,
-            detail="Exact duplicate applications cannot be marked as Submitted."
-        )
+    is_exact_duplicate = application.duplicate_status == "Exact Duplicate"
+    is_low_match = application.match_score is not None and application.match_score < 60
+    is_blocked_submit = status_update.status == "Submitted" and (is_exact_duplicate or is_low_match)
 
-    if (
-        application.match_score is not None
-        and application.match_score < 60
-        and status_update.status == "Submitted"
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="Low match applications cannot be marked as Submitted."
-        )
+    if is_blocked_submit:
+        expected_code = os.getenv("MANAGER_OVERRIDE_CODE", "")
+
+        if not status_update.override_code or status_update.override_code != expected_code:
+            raise HTTPException(
+                status_code=400,
+                detail="Manager override required for duplicate or low match submission."
+            )
+
+        if not status_update.override_reason:
+            raise HTTPException(
+                status_code=400,
+                detail="Override reason is required."
+            )
+
+        application.manager_override_used = "Yes"
+        application.manager_override_reason = status_update.override_reason
+        application.manager_override_by = status_update.override_by or "Unknown Manager"
+        application.manager_override_at = datetime.utcnow()
 
     application.status = status_update.status
 
     if status_update.status == "Submitted" and not application.submitted_at:
         application.submitted_at = datetime.utcnow()
-
+        
     db.commit()
     db.refresh(application)
 

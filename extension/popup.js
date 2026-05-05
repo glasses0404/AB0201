@@ -1,5 +1,21 @@
 const API_BASE_URL = "http://127.0.0.1:8000";
 
+const recentApplicationsBtn = document.getElementById("recentApplicationsBtn");
+const recentApplicationsBox = document.getElementById("recentApplicationsBox");
+const recentApplicationsOutput = document.getElementById(
+  "recentApplicationsOutput",
+);
+const recentStatusFilter = document.getElementById("recentStatusFilter");
+const recentBidderFilter = document.getElementById("recentBidderFilter");
+const recentCandidateFilter = document.getElementById("recentCandidateFilter");
+const applyRecentFiltersBtn = document.getElementById("applyRecentFiltersBtn");
+
+const managerOverrideBox = document.getElementById("managerOverrideBox");
+const overrideCodeInput = document.getElementById("overrideCode");
+const overrideByInput = document.getElementById("overrideBy");
+const overrideReasonInput = document.getElementById("overrideReason");
+const managerOverrideUsedEl = document.getElementById("managerOverrideUsed");
+
 const bidderNameSelect = document.getElementById("bidderName");
 const customBidderNameInput = document.getElementById("customBidderName");
 
@@ -138,6 +154,148 @@ function showDuplicateWarning(duplicateStatus) {
 
   duplicateWarningBox.classList.add("hidden");
   duplicateWarningBox.innerHTML = "";
+}
+
+async function getRecentApplications(filters = {}) {
+  const params = new URLSearchParams();
+
+  params.set("limit", "20");
+
+  if (filters.status) {
+    params.set("status", filters.status);
+  }
+
+  if (filters.createdBy) {
+    params.set("created_by", filters.createdBy);
+  }
+
+  if (filters.candidateId) {
+    params.set("candidate_id", filters.candidateId);
+  }
+
+  const response = await fetch(
+    `${API_BASE_URL}/applications?${params.toString()}`,
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
+
+  return await response.json();
+}
+
+function getRecentApplicationFilters() {
+  return {
+    status: recentStatusFilter.value,
+    createdBy: recentBidderFilter.value.trim(),
+    candidateId: recentCandidateFilter.value.trim(),
+  };
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+
+  try {
+    return new Date(value).toLocaleString();
+  } catch (error) {
+    return value;
+  }
+}
+
+function renderRecentApplications(applications) {
+  recentApplicationsOutput.innerHTML = "";
+
+  if (!applications.length) {
+    recentApplicationsOutput.innerHTML = `
+      <div class="application-card">
+        No applications found for these filters.
+      </div>
+    `;
+    return;
+  }
+
+  applications.forEach((app) => {
+    const card = document.createElement("div");
+    card.className = "application-card";
+
+    const duplicatePill =
+      app.duplicate_status && app.duplicate_status !== "Unique"
+        ? `<span class="application-warning-pill">${app.duplicate_status}</span>`
+        : "";
+
+    const lowMatchPill =
+      app.match_score !== null &&
+      app.match_score !== undefined &&
+      Number(app.match_score) < 60
+        ? `<span class="application-warning-pill">Low Match</span>`
+        : "";
+
+    card.innerHTML = `
+      <div class="application-card-title">
+        #${app.id} - ${app.job_title || "Unknown Job"}
+      </div>
+
+      <div class="application-card-meta">
+        ${app.company_name || "Unknown Company"}<br>
+        Candidate ID: ${app.candidate_id || "-"} | Bidder: ${app.created_by || "Unknown"}<br>
+        Match: ${app.match_score !== null && app.match_score !== undefined ? app.match_score + "%" : "-"}<br>
+        Created: ${formatDateTime(app.created_at)}<br>
+        Submitted: ${formatDateTime(app.submitted_at)}
+      </div>
+
+      <span class="application-status-pill">${app.status || "-"}</span>
+      ${duplicatePill}
+      ${lowMatchPill}
+
+      <div class="application-card-actions">
+        <button class="load-application-btn" data-id="${app.id}">Load</button>
+        <button class="open-url-btn" data-url="${encodeURIComponent(app.original_job_url || "")}">Open URL</button>
+      </div>
+    `;
+
+    recentApplicationsOutput.appendChild(card);
+  });
+
+  document.querySelectorAll(".load-application-btn").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const applicationId = button.getAttribute("data-id");
+      await loadApplicationIntoResultBox(applicationId);
+    });
+  });
+
+  document.querySelectorAll(".open-url-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      const encodedUrl = button.getAttribute("data-url");
+      const url = decodeURIComponent(encodedUrl || "");
+
+      if (url) {
+        chrome.tabs.create({ url });
+      }
+    });
+  });
+}
+
+async function loadApplicationIntoResultBox(applicationId) {
+  const response = await fetch(`${API_BASE_URL}/applications/${applicationId}`);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
+
+  const application = await response.json();
+
+  displayApplicationDraft(application);
+  setStatus(`Loaded application #${application.id}.`, "success");
+}
+
+async function loadRecentApplications() {
+  const filters = getRecentApplicationFilters();
+  const applications = await getRecentApplications(filters);
+
+  recentApplicationsBox.classList.remove("hidden");
+  renderRecentApplications(applications);
 }
 
 function clearCreateCandidateForm() {
@@ -505,6 +663,8 @@ function displayApplicationDraft(result) {
     ? new Date(result.submitted_at).toLocaleString()
     : "-";
 
+  managerOverrideUsedEl.innerText = result.manager_override_used || "No";
+
   if (statusSelect && result.status) {
     statusSelect.value = result.status;
   }
@@ -528,6 +688,8 @@ function displayApplicationDraft(result) {
   screeningAnswersOutput.innerText =
     safeJsonPretty(result.screening_answers) ||
     "No screening answers generated.";
+
+  updateManagerOverrideVisibility();
 }
 
 async function copyToClipboard(text, successMessage) {
@@ -573,7 +735,11 @@ function showAiJobInfoPreview(info) {
   `;
 }
 
-async function updateApplicationStatus(applicationId, status) {
+async function updateApplicationStatus(
+  applicationId,
+  status,
+  overrideData = {},
+) {
   const response = await fetch(
     `${API_BASE_URL}/applications/${applicationId}/status`,
     {
@@ -583,6 +749,9 @@ async function updateApplicationStatus(applicationId, status) {
       },
       body: JSON.stringify({
         status,
+        override_code: overrideData.overrideCode || null,
+        override_reason: overrideData.overrideReason || null,
+        override_by: overrideData.overrideBy || null,
       }),
     },
   );
@@ -617,6 +786,76 @@ function loadSavedBidderName() {
     }
   });
 }
+
+function requiresManagerOverride(applicationDraft, newStatus) {
+  if (!applicationDraft || newStatus !== "Submitted") {
+    return false;
+  }
+
+  const isExactDuplicate =
+    applicationDraft.duplicate_status === "Exact Duplicate";
+  const isLowMatch =
+    applicationDraft.match_score !== null &&
+    applicationDraft.match_score !== undefined &&
+    Number(applicationDraft.match_score) < 60;
+
+  return isExactDuplicate || isLowMatch;
+}
+
+function updateManagerOverrideVisibility() {
+  const newStatus = statusSelect.value;
+
+  if (requiresManagerOverride(latestApplicationDraft, newStatus)) {
+    managerOverrideBox.classList.remove("hidden");
+  } else {
+    managerOverrideBox.classList.add("hidden");
+  }
+}
+
+function getOverrideData() {
+  return {
+    overrideCode: overrideCodeInput.value.trim(),
+    overrideBy: overrideByInput.value.trim(),
+    overrideReason: overrideReasonInput.value.trim(),
+  };
+}
+
+recentApplicationsBtn.addEventListener("click", async () => {
+  try {
+    setStatus("Loading recent applications...", "success");
+
+    if (recentApplicationsBox.classList.contains("hidden")) {
+      recentApplicationsBox.classList.remove("hidden");
+    } else {
+      recentApplicationsBox.classList.add("hidden");
+      return;
+    }
+
+    await loadRecentApplications();
+
+    setStatus("Recent applications loaded.", "success");
+  } catch (error) {
+    console.error(error);
+    setStatus("Recent applications error: " + error.message, "error");
+  }
+});
+
+applyRecentFiltersBtn.addEventListener("click", async () => {
+  try {
+    setStatus("Applying filters...", "success");
+
+    await loadRecentApplications();
+
+    setStatus("Filters applied.", "success");
+  } catch (error) {
+    console.error(error);
+    setStatus("Filter error: " + error.message, "error");
+  }
+});
+
+statusSelect.addEventListener("change", () => {
+  updateManagerOverrideVisibility();
+});
 
 bidderNameSelect.addEventListener("change", () => {
   if (bidderNameSelect.value === "Other") {
@@ -686,29 +925,21 @@ updateStatusBtn.addEventListener("click", async () => {
     }
 
     const newStatus = statusSelect.value;
+    const overrideRequired = requiresManagerOverride(
+      latestApplicationDraft,
+      newStatus,
+    );
 
-    if (
-      latestApplicationDraft.duplicate_status === "Exact Duplicate" &&
-      newStatus === "Submitted"
-    ) {
-      setStatus(
-        "Blocked: Exact duplicate cannot be marked as Submitted. Use Duplicate status or ask manager to review.",
-        "error",
-      );
-      return;
-    }
+    let overrideData = {};
 
-    if (
-      latestApplicationDraft.match_score !== null &&
-      latestApplicationDraft.match_score !== undefined &&
-      Number(latestApplicationDraft.match_score) < 60 &&
-      newStatus === "Submitted"
-    ) {
-      setStatus(
-        "Blocked: Match score is below 60%. Mark as Skipped - Low Match or ask a manager to review.",
-        "error",
-      );
-      return;
+    if (overrideRequired) {
+      overrideData = getOverrideData();
+
+      if (!overrideData.overrideCode || !overrideData.overrideReason) {
+        setStatus("Manager override code and reason are required.", "error");
+        managerOverrideBox.classList.remove("hidden");
+        return;
+      }
     }
 
     setStatus("Updating application status...", "success");
@@ -716,11 +947,19 @@ updateStatusBtn.addEventListener("click", async () => {
     const updatedApplication = await updateApplicationStatus(
       latestApplicationDraft.id,
       newStatus,
+      overrideData,
     );
 
     displayApplicationDraft(updatedApplication);
 
-    setStatus(`Status updated to: ${newStatus}`, "success");
+    if (updatedApplication.manager_override_used === "Yes") {
+      setStatus(
+        `Status updated to Submitted with manager override.`,
+        "success",
+      );
+    } else {
+      setStatus(`Status updated to: ${newStatus}`, "success");
+    }
   } catch (error) {
     console.error(error);
     setStatus("Status update error: " + error.message, "error");

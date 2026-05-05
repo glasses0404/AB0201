@@ -198,6 +198,67 @@
         border: 1px solid #22c55e;
         color: #14532d;
       }
+
+      .manager-override-box {
+        margin-top: 10px;
+        background: #fff7ed;
+        border: 1px solid #fb923c;
+        border-radius: 8px;
+        padding: 10px;
+      }
+
+      .application-card {
+        margin-top: 10px;
+        padding: 9px;
+        background: #ffffff;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .application-card-title {
+        font-weight: bold;
+        font-size: 13px;
+        margin-bottom: 4px;
+      }
+
+      .application-card-meta {
+        color: #4b5563;
+        margin-bottom: 6px;
+      }
+
+      .application-card-actions {
+        display: flex;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .application-card-actions button {
+        margin-top: 0;
+        font-size: 11px;
+        padding: 6px;
+      }
+
+      .application-status-pill {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 999px;
+        background: #e5e7eb;
+        color: #111827;
+        font-size: 11px;
+        margin-top: 3px;
+      }
+
+      .application-warning-pill {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 999px;
+        background: #fee2e2;
+        color: #7f1d1d;
+        font-size: 11px;
+        margin-top: 3px;
+      }
     </style>
   </head>
   <body>
@@ -344,6 +405,42 @@
       <div id="dailyReportOutput" class="output-text"></div>
     </div>
 
+    <button id="recentApplicationsBtn" class="secondary">
+      Show Recent Applications
+    </button>
+
+    <div id="recentApplicationsBox" class="result-box hidden">
+      <div class="result-title">Recent Applications</div>
+
+      <label>Filter Status</label>
+      <select id="recentStatusFilter">
+        <option value="">All Statuses</option>
+        <option value="Draft Generated">Draft Generated</option>
+        <option value="Needs Review">Needs Review</option>
+        <option value="Approved">Approved</option>
+        <option value="Submitted">Submitted</option>
+        <option value="Duplicate">Duplicate</option>
+        <option value="Skipped - Low Match">Skipped - Low Match</option>
+        <option value="Failed">Failed</option>
+      </select>
+
+      <label>Filter Bidder</label>
+      <input id="recentBidderFilter" type="text" placeholder="Example: David" />
+
+      <label>Filter Candidate ID</label>
+      <input
+        id="recentCandidateFilter"
+        type="number"
+        placeholder="Example: 1"
+      />
+
+      <button id="applyRecentFiltersBtn" class="secondary">
+        Apply Filters
+      </button>
+
+      <div id="recentApplicationsOutput"></div>
+    </div>
+
     <div id="status"></div>
 
     <div id="resultBox" class="result-box hidden">
@@ -376,6 +473,11 @@
         <strong id="submittedAt">-</strong>
       </div>
 
+      <div class="metric-row">
+        <span>Manager Override:</span>
+        <strong id="managerOverrideUsed">-</strong>
+      </div>
+
       <label>Update Status</label>
       <select id="statusSelect">
         <option value="Draft Generated">Draft Generated</option>
@@ -390,6 +492,26 @@
       <button id="updateStatusBtn" class="secondary">
         Update Application Status
       </button>
+
+      <div id="managerOverrideBox" class="manager-override-box hidden">
+        <div class="result-title">Manager Override</div>
+
+        <label>Override Code</label>
+        <input
+          id="overrideCode"
+          type="password"
+          placeholder="Manager override code"
+        />
+
+        <label>Override By</label>
+        <input id="overrideBy" type="text" placeholder="Manager name" />
+
+        <label>Override Reason</label>
+        <textarea
+          id="overrideReason"
+          placeholder="Explain why this blocked application should be submitted"
+        ></textarea>
+      </div>
 
       <label>Cover Letter</label>
       <div id="coverLetterOutput" class="output-text"></div>
