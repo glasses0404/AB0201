@@ -1,4 +1,8 @@
 import os
+import csv
+from io import StringIO
+from fastapi.responses import StreamingResponse
+
 from datetime import datetime, date, time
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -248,7 +252,7 @@ def update_application_status(
 
     if status_update.status == "Submitted" and not application.submitted_at:
         application.submitted_at = datetime.utcnow()
-        
+
     db.commit()
     db.refresh(application)
 
@@ -372,3 +376,93 @@ def get_daily_report(report_date: str, db: Session = Depends(get_db)):
         "low_match_applications": low_match_applications,
         "duplicate_applications": duplicate_applications
     }
+
+@app.get("/reports/daily.csv")
+def export_daily_report_csv(report_date: str, db: Session = Depends(get_db)):
+    """
+    Export daily application report as CSV.
+
+    Example:
+    /reports/daily.csv?report_date=2026-05-05
+    """
+
+    try:
+        selected_date = datetime.strptime(report_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid date format. Use YYYY-MM-DD."
+        )
+
+    start_datetime = datetime.combine(selected_date, time.min)
+    end_datetime = datetime.combine(selected_date, time.max)
+
+    applications = db.query(Application).filter(
+        Application.created_at >= start_datetime,
+        Application.created_at <= end_datetime
+    ).order_by(Application.created_at.desc()).all()
+
+    output = StringIO()
+
+    fieldnames = [
+        "application_id",
+        "report_date",
+        "candidate_id",
+        "candidate_name",
+        "company_name",
+        "job_title",
+        "created_by",
+        "status",
+        "match_score",
+        "duplicate_status",
+        "original_job_url",
+        "canonical_job_url",
+        "submitted_at",
+        "created_at",
+        "manager_override_used",
+        "manager_override_by",
+        "manager_override_reason",
+        "manager_override_at"
+    ]
+
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+
+    for app_item in applications:
+        candidate_name = "Unknown Candidate"
+
+        if app_item.candidate:
+            candidate_name = f"{app_item.candidate.first_name} {app_item.candidate.last_name}"
+
+        writer.writerow({
+            "application_id": app_item.id,
+            "report_date": selected_date.isoformat(),
+            "candidate_id": app_item.candidate_id,
+            "candidate_name": candidate_name,
+            "company_name": app_item.company_name,
+            "job_title": app_item.job_title,
+            "created_by": app_item.created_by or "Unknown",
+            "status": app_item.status,
+            "match_score": app_item.match_score,
+            "duplicate_status": app_item.duplicate_status,
+            "original_job_url": app_item.original_job_url,
+            "canonical_job_url": app_item.canonical_job_url,
+            "submitted_at": app_item.submitted_at.isoformat() if app_item.submitted_at else "",
+            "created_at": app_item.created_at.isoformat() if app_item.created_at else "",
+            "manager_override_used": app_item.manager_override_used or "No",
+            "manager_override_by": app_item.manager_override_by or "",
+            "manager_override_reason": app_item.manager_override_reason or "",
+            "manager_override_at": app_item.manager_override_at.isoformat() if app_item.manager_override_at else ""
+        })
+
+    output.seek(0)
+
+    filename = f"daily_application_report_{selected_date.isoformat()}.csv"
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
+    )

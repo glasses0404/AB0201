@@ -59,6 +59,7 @@ const statusDiv = document.getElementById("status");
 const dailyReportBtn = document.getElementById("dailyReportBtn");
 const dailyReportBox = document.getElementById("dailyReportBox");
 const dailyReportOutput = document.getElementById("dailyReportOutput");
+const exportDailyCsvBtn = document.getElementById("exportDailyCsvBtn");
 
 const resultBox = document.getElementById("resultBox");
 const applicationIdEl = document.getElementById("applicationId");
@@ -819,6 +820,20 @@ function getOverrideData() {
     overrideReason: overrideReasonInput.value.trim(),
   };
 }
+
+exportDailyCsvBtn.addEventListener("click", async () => {
+  try {
+    const today = getTodayDateString();
+    const csvUrl = `${API_BASE_URL}/reports/daily.csv?report_date=${today}`;
+
+    chrome.tabs.create({ url: csvUrl });
+
+    setStatus("CSV export opened in a new tab.", "success");
+  } catch (error) {
+    console.error(error);
+    setStatus("CSV export error: " + error.message, "error");
+  }
+});
 
 recentApplicationsBtn.addEventListener("click", async () => {
   try {
