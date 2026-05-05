@@ -6,7 +6,7 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      width: 360px;
+      width: 420px;
       padding: 14px;
       background: #f7f7f7;
     }
@@ -43,6 +43,7 @@
       border: none;
       border-radius: 6px;
       cursor: pointer;
+      padding: 10px;
     }
 
     button:hover {
@@ -70,6 +71,50 @@
       color: #555;
       word-break: break-all;
     }
+
+    .result-box {
+      margin-top: 14px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px;
+    }
+
+    .result-title {
+      font-weight: bold;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+
+    .metric-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin: 4px 0;
+    }
+
+    .output-text {
+      white-space: pre-wrap;
+      font-size: 12px;
+      line-height: 1.4;
+      max-height: 180px;
+      overflow-y: auto;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      padding: 8px;
+      border-radius: 6px;
+    }
+
+    .copy-btn {
+      background: #059669;
+      margin-top: 6px;
+      padding: 7px;
+      font-size: 12px;
+    }
+
+    .hidden {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -94,6 +139,38 @@
   <button id="autofillBtn" class="secondary">Autofill Basic Fields</button>
 
   <div id="status"></div>
+
+  <div id="resultBox" class="result-box hidden">
+    <div class="result-title">Application Draft Result</div>
+
+    <div class="metric-row">
+      <span>Application ID:</span>
+      <strong id="applicationId">-</strong>
+    </div>
+
+    <div class="metric-row">
+      <span>Match Score:</span>
+      <strong id="matchScore">-</strong>
+    </div>
+
+    <div class="metric-row">
+      <span>Duplicate:</span>
+      <strong id="duplicateStatus">-</strong>
+    </div>
+
+    <div class="metric-row">
+      <span>Status:</span>
+      <strong id="applicationStatus">-</strong>
+    </div>
+
+    <label>Cover Letter</label>
+    <div id="coverLetterOutput" class="output-text"></div>
+    <button id="copyCoverLetterBtn" class="copy-btn">Copy Cover Letter</button>
+
+    <label>Screening Answers</label>
+    <div id="screeningAnswersOutput" class="output-text"></div>
+    <button id="copyScreeningAnswersBtn" class="copy-btn">Copy Screening Answers</button>
+  </div>
 
   <script src="popup.js"></script>
 </body>

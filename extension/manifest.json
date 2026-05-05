@@ -5,7 +5,8 @@
   "description": "Capture job pages, generate application drafts, and autofill basic fields.",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "clipboardWrite"
   ],
   "host_permissions": [
     "http://127.0.0.1:8000/*",

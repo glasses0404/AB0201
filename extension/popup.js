@@ -9,8 +9,19 @@ const captureBtn = document.getElementById("captureBtn");
 const autofillBtn = document.getElementById("autofillBtn");
 const statusDiv = document.getElementById("status");
 
+const resultBox = document.getElementById("resultBox");
+const applicationIdEl = document.getElementById("applicationId");
+const matchScoreEl = document.getElementById("matchScore");
+const duplicateStatusEl = document.getElementById("duplicateStatus");
+const applicationStatusEl = document.getElementById("applicationStatus");
+const coverLetterOutput = document.getElementById("coverLetterOutput");
+const screeningAnswersOutput = document.getElementById("screeningAnswersOutput");
+const copyCoverLetterBtn = document.getElementById("copyCoverLetterBtn");
+const copyScreeningAnswersBtn = document.getElementById("copyScreeningAnswersBtn");
+
 let currentPageData = null;
 let latestCandidateProfile = null;
+let latestApplicationDraft = null;
 
 function setStatus(message, type = "success") {
   statusDiv.className = type;
@@ -57,9 +68,48 @@ async function getCandidate(candidateId) {
   return await response.json();
 }
 
+function safeJsonPretty(value) {
+  if (!value) return "";
+
+  try {
+    const parsed = JSON.parse(value);
+    return JSON.stringify(parsed, null, 2);
+  } catch (error) {
+    return value;
+  }
+}
+
+function displayApplicationDraft(result) {
+  latestApplicationDraft = result;
+
+  resultBox.classList.remove("hidden");
+
+  applicationIdEl.innerText = result.id || "-";
+  matchScoreEl.innerText = result.match_score !== null && result.match_score !== undefined
+    ? `${result.match_score}%`
+    : "-";
+
+  duplicateStatusEl.innerText = result.duplicate_status || "-";
+  applicationStatusEl.innerText = result.status || "-";
+
+  coverLetterOutput.innerText = result.cover_letter || "No cover letter generated.";
+  screeningAnswersOutput.innerText = safeJsonPretty(result.screening_answers) || "No screening answers generated.";
+}
+
+async function copyToClipboard(text, successMessage) {
+  if (!text) {
+    setStatus("Nothing to copy.", "error");
+    return;
+  }
+
+  await navigator.clipboard.writeText(text);
+  setStatus(successMessage, "success");
+}
+
 captureBtn.addEventListener("click", async () => {
   try {
     setStatus("Generating application draft...", "success");
+    resultBox.classList.add("hidden");
 
     const candidateId = Number(candidateIdInput.value);
     const companyName = companyNameInput.value.trim();
@@ -99,8 +149,10 @@ captureBtn.addEventListener("click", async () => {
 
     const result = await response.json();
 
+    displayApplicationDraft(result);
+
     setStatus(
-      `Draft created. Match Score: ${result.match_score}%. Duplicate: ${result.duplicate_status}.`,
+      `Draft created successfully. Match Score: ${result.match_score}%.`,
       "success"
     );
 
@@ -136,6 +188,20 @@ autofillBtn.addEventListener("click", async () => {
     console.error(error);
     setStatus("Autofill error: " + error.message, "error");
   }
+});
+
+copyCoverLetterBtn.addEventListener("click", async () => {
+  await copyToClipboard(
+    coverLetterOutput.innerText,
+    "Cover letter copied."
+  );
+});
+
+copyScreeningAnswersBtn.addEventListener("click", async () => {
+  await copyToClipboard(
+    screeningAnswersOutput.innerText,
+    "Screening answers copied."
+  );
 });
 
 loadCurrentUrl();
