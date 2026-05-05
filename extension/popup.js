@@ -2,6 +2,9 @@ const API_BASE_URL = "http://127.0.0.1:8000";
 
 const syncGoogleSheetsBtn = document.getElementById("syncGoogleSheetsBtn");
 const recentApplicationsBtn = document.getElementById("recentApplicationsBtn");
+const syncTodayGoogleSheetsBtn = document.getElementById(
+  "syncTodayGoogleSheetsBtn",
+);
 const recentApplicationsBox = document.getElementById("recentApplicationsBox");
 const recentApplicationsOutput = document.getElementById(
   "recentApplicationsOutput",
@@ -186,6 +189,10 @@ async function syncApplicationsToGoogleSheets(filters = {}) {
   const params = new URLSearchParams();
 
   params.set("limit", "100");
+  if (filters.todayOnly) {
+    params.set("today_only", "true");
+  }
+
   const bidderName = getSelectedBidderName();
 
   if (bidderName) {
@@ -366,6 +373,7 @@ Created At: ${formatDateTime(log.created_at)}
 New Rows: ${log.rows_synced}
 Updated Rows: ${log.rows_updated}
 Skipped Rows: ${log.rows_skipped}
+Today Only: ${log.today_only_filter || "No"}
 Status Filter: ${log.status_filter || "All"}
 Bidder Filter: ${log.created_by_filter || "All"}
 Candidate Filter: ${log.candidate_id_filter || "All"}
@@ -936,6 +944,30 @@ function getOverrideData() {
     overrideBy: overrideByInput.value.trim(),
     overrideReason: overrideReasonInput.value.trim(),
   };
+}
+
+if (syncTodayGoogleSheetsBtn) {
+  syncTodayGoogleSheetsBtn.addEventListener("click", async () => {
+    try {
+      setStatus("Syncing today's applications to Google Sheets...", "success");
+
+      const filters = getRecentApplicationFilters
+        ? getRecentApplicationFilters()
+        : {};
+
+      filters.todayOnly = true;
+
+      const result = await syncApplicationsToGoogleSheets(filters);
+
+      setStatus(
+        `Today sync complete. New: ${result.rows_synced}, Updated: ${result.rows_updated}, Log ID: ${result.sync_log_id}`,
+        "success",
+      );
+    } catch (error) {
+      console.error(error);
+      setStatus("Today Google Sheets sync error: " + error.message, "error");
+    }
+  });
 }
 
 if (syncGoogleSheetsBtn) {

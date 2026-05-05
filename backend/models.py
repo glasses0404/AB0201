@@ -77,6 +77,7 @@ class GoogleSheetsSyncLog(Base):
     created_by_filter = Column(String, nullable=True)
     candidate_id_filter = Column(Integer, nullable=True)
     limit_filter = Column(Integer, nullable=True)
+    today_only_filter = Column(String, nullable=True)
 
     rows_synced = Column(Integer, default=0)
     rows_updated = Column(Integer, default=0)

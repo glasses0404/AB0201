@@ -594,9 +594,20 @@ def sync_applications_google_sheets(
     candidate_id: int | None = None,
     limit: int = 100,
     triggered_by: str | None = None,
+    today_only: bool = False,
     db: Session = Depends(get_db)
 ):
     query = db.query(Application)
+
+    if today_only:
+        selected_date = datetime.utcnow().date()
+        start_datetime = datetime.combine(selected_date, time.min)
+        end_datetime = datetime.combine(selected_date, time.max)
+
+        query = query.filter(
+            Application.created_at >= start_datetime,
+            Application.created_at <= end_datetime
+        )
 
     if status:
         query = query.filter(Application.status == status)
@@ -615,6 +626,7 @@ def sync_applications_google_sheets(
         created_by_filter=created_by,
         candidate_id_filter=candidate_id,
         limit_filter=limit,
+        today_only_filter="Yes" if today_only else "No",
         sync_status="Started"
     )
 
@@ -684,7 +696,9 @@ def sync_applications_google_sheets(
             "status": status,
             "created_by": created_by,
             "candidate_id": candidate_id,
-            "limit": limit
+            "limit": limit,
+            "triggered_by": triggered_by,
+            "today_only": today_only
         },
         "rows_synced": result["rows_synced"],
         "rows_updated": result["rows_updated"],
