@@ -2,7 +2,6 @@ import os
 import csv
 from io import StringIO
 from fastapi.responses import StreamingResponse
-from services.google_sheets_service import sync_applications_to_sheet
 
 from datetime import datetime, date, time
 from fastapi import FastAPI, Depends, HTTPException
@@ -29,6 +28,14 @@ from services.match_service import calculate_match_score
 from services.cover_letter_service import generate_cover_letter
 from services.screening_service import generate_screening_answers
 from services.job_extract_service import extract_job_info_with_ai
+from services.google_sheets_service import (
+    sync_applications_to_sheet,
+    sync_dashboard_to_sheet
+)
+from services.slack_service import (
+    format_daily_report_for_slack,
+    send_slack_message
+)
 
 Base.metadata.create_all(bind=engine)
 
@@ -378,15 +385,7 @@ def update_application_status(
 
     return application
 
-@app.get("/reports/daily")
-def get_daily_report(report_date: str, db: Session = Depends(get_db)):
-    """
-    Daily report for applications created/submitted on a selected date.
-
-    Example:
-    /reports/daily?report_date=2026-05-05
-    """
-
+def build_daily_report_data(report_date: str, db: Session):
     try:
         selected_date = datetime.strptime(report_date, "%Y-%m-%d").date()
     except ValueError:
@@ -496,6 +495,10 @@ def get_daily_report(report_date: str, db: Session = Depends(get_db)):
         "low_match_applications": low_match_applications,
         "duplicate_applications": duplicate_applications
     }
+
+@app.get("/reports/daily")
+def get_daily_report(report_date: str, db: Session = Depends(get_db)):
+    return build_daily_report_data(report_date, db)
 
 @app.get("/reports/daily.csv")
 def export_daily_report_csv(report_date: str, db: Session = Depends(get_db)):
@@ -746,3 +749,42 @@ def list_google_sheets_sync_logs(
     ).limit(limit).all()
 
     return logs
+
+@app.post("/sync/google-sheets/dashboard")
+def sync_google_sheets_dashboard(
+    report_date: str,
+    db: Session = Depends(get_db)
+):
+    dashboard_data = build_daily_report_data(report_date, db)
+
+    result = sync_dashboard_to_sheet(
+        report_date=report_date,
+        dashboard_data=dashboard_data
+    )
+
+    return {
+        "message": "Dashboard synced to Google Sheets",
+        "report_date": report_date,
+        "worksheet": result["worksheet"],
+        "rows_written": result["rows_written"],
+        "summary": dashboard_data["summary"]
+    }
+
+@app.post("/slack/daily-report")
+def send_slack_daily_report(
+    report_date: str,
+    db: Session = Depends(get_db)
+):
+    report_data = build_daily_report_data(report_date, db)
+
+    slack_message = format_daily_report_for_slack(report_data)
+
+    result = send_slack_message(slack_message)
+
+    return {
+        "message": "Daily report sent to Slack",
+        "report_date": report_date,
+        "slack_status": result["status"],
+        "status_code": result["status_code"],
+        "summary": report_data["summary"]
+    }

@@ -9,6 +9,9 @@ const recentApplicationsBox = document.getElementById("recentApplicationsBox");
 const recentApplicationsOutput = document.getElementById(
   "recentApplicationsOutput",
 );
+const sendSlackDailyReportBtn = document.getElementById(
+  "sendSlackDailyReportBtn",
+);
 const syncStartDateInput = document.getElementById("syncStartDate");
 const syncEndDateInput = document.getElementById("syncEndDate");
 const syncDateRangeBtn = document.getElementById("syncDateRangeBtn");
@@ -32,6 +35,7 @@ const candidatePreview = document.getElementById("candidatePreview");
 const syncLogsBtn = document.getElementById("syncLogsBtn");
 const syncLogsBox = document.getElementById("syncLogsBox");
 const syncLogsOutput = document.getElementById("syncLogsOutput");
+const syncDashboardBtn = document.getElementById("syncDashboardBtn");
 
 const toggleCreateCandidateBtn = document.getElementById(
   "toggleCreateCandidateBtn",
@@ -354,6 +358,44 @@ function renderRecentApplications(applications) {
       }
     });
   });
+}
+
+async function sendSlackDailyReport(reportDate) {
+  const params = new URLSearchParams();
+  params.set("report_date", reportDate);
+
+  const response = await fetch(
+    `${API_BASE_URL}/slack/daily-report?${params.toString()}`,
+    {
+      method: "POST",
+    },
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
+
+  return await response.json();
+}
+
+async function syncDashboardToGoogleSheets(reportDate) {
+  const params = new URLSearchParams();
+  params.set("report_date", reportDate);
+
+  const response = await fetch(
+    `${API_BASE_URL}/sync/google-sheets/dashboard?${params.toString()}`,
+    {
+      method: "POST",
+    },
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
+
+  return await response.json();
 }
 
 async function getGoogleSheetsSyncLogs() {
@@ -955,6 +997,44 @@ function getOverrideData() {
     overrideBy: overrideByInput.value.trim(),
     overrideReason: overrideReasonInput.value.trim(),
   };
+}
+
+if (syncDashboardBtn) {
+  syncDashboardBtn.addEventListener("click", async () => {
+    try {
+      setStatus("Syncing dashboard to Google Sheets...", "success");
+
+      const today = getTodayDateString();
+      const result = await syncDashboardToGoogleSheets(today);
+
+      setStatus(
+        `Dashboard synced. Rows written: ${result.rows_written}`,
+        "success",
+      );
+    } catch (error) {
+      console.error(error);
+      setStatus("Dashboard sync error: " + error.message, "error");
+    }
+  });
+}
+
+if (sendSlackDailyReportBtn) {
+  sendSlackDailyReportBtn.addEventListener("click", async () => {
+    try {
+      setStatus("Sending Slack daily report...", "success");
+
+      const today = getTodayDateString();
+      const result = await sendSlackDailyReport(today);
+
+      setStatus(
+        `Slack report sent. Created: ${result.summary.total_created}, Submitted: ${result.summary.total_submitted}`,
+        "success",
+      );
+    } catch (error) {
+      console.error(error);
+      setStatus("Slack report error: " + error.message, "error");
+    }
+  });
 }
 
 if (syncTodayGoogleSheetsBtn) {
