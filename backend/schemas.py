@@ -91,6 +91,8 @@ class GoogleSheetsSyncLogResponse(BaseModel):
     candidate_id_filter: Optional[int] = None
     limit_filter: Optional[int] = None
     today_only_filter: Optional[str] = None
+    start_date_filter: Optional[str] = None
+    end_date_filter: Optional[str] = None
 
     rows_synced: int
     rows_updated: int

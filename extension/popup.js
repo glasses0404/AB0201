@@ -9,6 +9,9 @@ const recentApplicationsBox = document.getElementById("recentApplicationsBox");
 const recentApplicationsOutput = document.getElementById(
   "recentApplicationsOutput",
 );
+const syncStartDateInput = document.getElementById("syncStartDate");
+const syncEndDateInput = document.getElementById("syncEndDate");
+const syncDateRangeBtn = document.getElementById("syncDateRangeBtn");
 const recentStatusFilter = document.getElementById("recentStatusFilter");
 const recentBidderFilter = document.getElementById("recentBidderFilter");
 const recentCandidateFilter = document.getElementById("recentCandidateFilter");
@@ -192,6 +195,13 @@ async function syncApplicationsToGoogleSheets(filters = {}) {
   if (filters.todayOnly) {
     params.set("today_only", "true");
   }
+  if (filters.startDate) {
+    params.set("start_date", filters.startDate);
+  }
+
+  if (filters.endDate) {
+    params.set("end_date", filters.endDate);
+  }
 
   const bidderName = getSelectedBidderName();
 
@@ -374,6 +384,7 @@ New Rows: ${log.rows_synced}
 Updated Rows: ${log.rows_updated}
 Skipped Rows: ${log.rows_skipped}
 Today Only: ${log.today_only_filter || "No"}
+Date Range: ${log.start_date_filter || "Any"} to ${log.end_date_filter || "Any"}
 Status Filter: ${log.status_filter || "All"}
 Bidder Filter: ${log.created_by_filter || "All"}
 Candidate Filter: ${log.candidate_id_filter || "All"}
@@ -969,7 +980,43 @@ if (syncTodayGoogleSheetsBtn) {
     }
   });
 }
+if (syncDateRangeBtn) {
+  syncDateRangeBtn.addEventListener("click", async () => {
+    try {
+      const startDate = syncStartDateInput.value;
+      const endDate = syncEndDateInput.value;
 
+      if (!startDate || !endDate) {
+        setStatus("Please select both start date and end date.", "error");
+        return;
+      }
+
+      if (startDate > endDate) {
+        setStatus("Start date cannot be after end date.", "error");
+        return;
+      }
+
+      setStatus("Syncing selected date range to Google Sheets...", "success");
+
+      const filters = getRecentApplicationFilters
+        ? getRecentApplicationFilters()
+        : {};
+
+      filters.startDate = startDate;
+      filters.endDate = endDate;
+
+      const result = await syncApplicationsToGoogleSheets(filters);
+
+      setStatus(
+        `Date range sync complete. New: ${result.rows_synced}, Updated: ${result.rows_updated}, Log ID: ${result.sync_log_id}`,
+        "success",
+      );
+    } catch (error) {
+      console.error(error);
+      setStatus("Date range sync error: " + error.message, "error");
+    }
+  });
+}
 if (syncGoogleSheetsBtn) {
   syncGoogleSheetsBtn.addEventListener("click", async () => {
     try {

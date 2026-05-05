@@ -595,6 +595,8 @@ def sync_applications_google_sheets(
     limit: int = 100,
     triggered_by: str | None = None,
     today_only: bool = False,
+    start_date: str | None = None,
+    end_date: str | None = None,
     db: Session = Depends(get_db)
 ):
     query = db.query(Application)
@@ -609,6 +611,28 @@ def sync_applications_google_sheets(
             Application.created_at <= end_datetime
         )
 
+    if start_date:
+        try:
+            parsed_start = datetime.strptime(start_date, "%Y-%m-%d").date()
+            start_datetime = datetime.combine(parsed_start, time.min)
+            query = query.filter(Application.created_at >= start_datetime)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid start_date format. Use YYYY-MM-DD."
+            )
+
+    if end_date:
+        try:
+            parsed_end = datetime.strptime(end_date, "%Y-%m-%d").date()
+            end_datetime = datetime.combine(parsed_end, time.max)
+            query = query.filter(Application.created_at <= end_datetime)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid end_date format. Use YYYY-MM-DD."
+            )
+            
     if status:
         query = query.filter(Application.status == status)
 
@@ -627,6 +651,8 @@ def sync_applications_google_sheets(
         candidate_id_filter=candidate_id,
         limit_filter=limit,
         today_only_filter="Yes" if today_only else "No",
+        start_date_filter=start_date,
+        end_date_filter=end_date,
         sync_status="Started"
     )
 
@@ -698,7 +724,9 @@ def sync_applications_google_sheets(
             "candidate_id": candidate_id,
             "limit": limit,
             "triggered_by": triggered_by,
-            "today_only": today_only
+            "today_only": today_only,
+            "start_date": start_date,
+            "end_date": end_date
         },
         "rows_synced": result["rows_synced"],
         "rows_updated": result["rows_updated"],
