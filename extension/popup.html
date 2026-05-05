@@ -147,6 +147,32 @@
       .create-candidate-box textarea {
         background: #ffffff;
       }
+
+      .duplicate-warning {
+        margin-top: 8px;
+        padding: 9px;
+        border-radius: 6px;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .duplicate-warning.exact {
+        background: #fee2e2;
+        border: 1px solid #ef4444;
+        color: #7f1d1d;
+      }
+
+      .duplicate-warning.possible {
+        background: #fef3c7;
+        border: 1px solid #f59e0b;
+        color: #78350f;
+      }
+
+      .duplicate-warning.unique {
+        background: #dcfce7;
+        border: 1px solid #22c55e;
+        color: #14532d;
+      }
     </style>
   </head>
   <body>
@@ -312,6 +338,7 @@
         <span>Duplicate:</span>
         <strong id="duplicateStatus">-</strong>
       </div>
+      <div id="duplicateWarningBox" class="duplicate-warning hidden"></div>
 
       <div class="metric-row">
         <span>Status:</span>

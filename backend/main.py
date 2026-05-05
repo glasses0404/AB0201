@@ -131,6 +131,8 @@ def create_application(app_req: ApplicationCreate, db: Session = Depends(get_db)
         questions=app_req.screening_questions or []
     )
 
+    initial_status = "Duplicate" if duplicate_status == "Exact Duplicate" else "Draft Generated"
+
     new_application = Application(
         candidate_id=app_req.candidate_id,
         company_name=app_req.company_name,
@@ -143,7 +145,7 @@ def create_application(app_req: ApplicationCreate, db: Session = Depends(get_db)
         duplicate_status=duplicate_status,
         cover_letter=cover_letter,
         screening_answers=screening_answers,
-        status="Draft Generated",
+        status=initial_status,
         created_by=app_req.created_by
     )
 
@@ -192,6 +194,12 @@ def update_application_status(
 
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
+
+    if application.duplicate_status == "Exact Duplicate" and status_update.status == "Submitted":
+    raise HTTPException(
+        status_code=400,
+        detail="Exact duplicate applications cannot be marked as Submitted."
+    )
 
     application.status = status_update.status
 

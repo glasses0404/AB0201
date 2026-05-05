@@ -48,6 +48,7 @@ const resultBox = document.getElementById("resultBox");
 const applicationIdEl = document.getElementById("applicationId");
 const matchScoreEl = document.getElementById("matchScore");
 const duplicateStatusEl = document.getElementById("duplicateStatus");
+const duplicateWarningBox = document.getElementById("duplicateWarningBox");
 const applicationStatusEl = document.getElementById("applicationStatus");
 const submittedAtEl = document.getElementById("submittedAt");
 const statusSelect = document.getElementById("statusSelect");
@@ -65,6 +66,42 @@ let currentPageData = null;
 let latestCandidateProfile = null;
 let latestApplicationDraft = null;
 let allCandidates = [];
+
+function showDuplicateWarning(duplicateStatus) {
+  duplicateWarningBox.classList.remove("hidden", "exact", "possible", "unique");
+
+  if (duplicateStatus === "Exact Duplicate") {
+    duplicateWarningBox.classList.add("exact");
+    duplicateWarningBox.innerHTML = `
+      <strong>Exact Duplicate Detected</strong><br>
+      This candidate already has an application with the same canonical job URL.
+      Do not submit this application again unless a manager approves it.
+    `;
+    return;
+  }
+
+  if (duplicateStatus === "Possible Duplicate") {
+    duplicateWarningBox.classList.add("possible");
+    duplicateWarningBox.innerHTML = `
+      <strong>Possible Duplicate Detected</strong><br>
+      Same candidate, company, and job title may already exist.
+      Please review carefully before submitting.
+    `;
+    return;
+  }
+
+  if (duplicateStatus === "Unique") {
+    duplicateWarningBox.classList.add("unique");
+    duplicateWarningBox.innerHTML = `
+      <strong>Unique Application</strong><br>
+      No duplicate found for this candidate based on current rules.
+    `;
+    return;
+  }
+
+  duplicateWarningBox.classList.add("hidden");
+  duplicateWarningBox.innerHTML = "";
+}
 
 function clearCreateCandidateForm() {
   newFirstNameInput.value = "";
@@ -421,6 +458,8 @@ function displayApplicationDraft(result) {
       : "-";
 
   duplicateStatusEl.innerText = result.duplicate_status || "-";
+  showDuplicateWarning(result.duplicate_status);
+
   applicationStatusEl.innerText = result.status || "-";
 
   submittedAtEl.innerText = result.submitted_at
@@ -429,6 +468,10 @@ function displayApplicationDraft(result) {
 
   if (statusSelect && result.status) {
     statusSelect.value = result.status;
+  }
+
+  if (result.duplicate_status === "Exact Duplicate" && statusSelect) {
+    statusSelect.value = "Duplicate";
   }
 
   coverLetterOutput.innerText =
@@ -594,6 +637,17 @@ updateStatusBtn.addEventListener("click", async () => {
     }
 
     const newStatus = statusSelect.value;
+
+    if (
+      latestApplicationDraft.duplicate_status === "Exact Duplicate" &&
+      newStatus === "Submitted"
+    ) {
+      setStatus(
+        "Blocked: Exact duplicate cannot be marked as Submitted. Use Duplicate status or ask manager to review.",
+        "error",
+      );
+      return;
+    }
 
     setStatus("Updating application status...", "success");
 
