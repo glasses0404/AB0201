@@ -906,7 +906,7 @@ if (syncGoogleSheetsBtn) {
       const result = await syncApplicationsToGoogleSheets(filters);
 
       setStatus(
-        `Google Sheets sync complete. Rows synced: ${result.rows_synced}`,
+        `Google Sheets sync complete. Synced: ${result.rows_synced}, Skipped duplicates: ${result.rows_skipped}`,
         "success",
       );
     } catch (error) {
