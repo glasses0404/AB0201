@@ -55,7 +55,14 @@ def home():
     return {
         "message": "Autobidder MVP API is running"
     }
-
+    
+@app.get("/health")
+def health_check():
+    return {
+        "status": "ok",
+        "service": "Autobidder MVP API",
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 @app.post("/candidates", response_model=CandidateResponse)
 def create_candidate(candidate: CandidateCreate, db: Session = Depends(get_db)):

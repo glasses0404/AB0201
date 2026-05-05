@@ -1,5 +1,6 @@
 const API_BASE_URL = "http://127.0.0.1:8000";
 
+const checkBackendHealthBtn = document.getElementById("checkBackendHealthBtn");
 const slackLogsBtn = document.getElementById("slackLogsBtn");
 const slackLogsBox = document.getElementById("slackLogsBox");
 const slackLogsOutput = document.getElementById("slackLogsOutput");
@@ -361,6 +362,16 @@ function renderRecentApplications(applications) {
       }
     });
   });
+}
+
+async function checkBackendHealth() {
+  const response = await fetch(`${API_BASE_URL}/health`);
+
+  if (!response.ok) {
+    throw new Error("Backend health check failed.");
+  }
+
+  return await response.json();
 }
 
 async function getSlackReportLogs() {
@@ -1056,6 +1067,21 @@ if (slackLogsBtn) {
     } catch (error) {
       console.error(error);
       setStatus("Slack logs error: " + error.message, "error");
+    }
+  });
+}
+
+if (checkBackendHealthBtn) {
+  checkBackendHealthBtn.addEventListener("click", async () => {
+    try {
+      setStatus("Checking backend health...", "success");
+
+      const result = await checkBackendHealth();
+
+      setStatus(`Backend is healthy. Status: ${result.status}`, "success");
+    } catch (error) {
+      console.error(error);
+      setStatus("Backend health error: " + error.message, "error");
     }
   });
 }
