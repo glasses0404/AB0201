@@ -108,3 +108,18 @@ class SlackReportLog(Base):
     error_message = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class CandidateAnswer(Base):
+    __tablename__ = "candidate_answers"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    candidate_id = Column(Integer, ForeignKey("candidates.id"), nullable=False)
+
+    question_key = Column(String, nullable=False)
+    question_label = Column(Text, nullable=False)
+    answer = Column(Text, nullable=False)
+    answer_type = Column(String, default="short")
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)

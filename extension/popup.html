@@ -376,6 +376,55 @@
       <button id="createCandidateBtn">Create Candidate</button>
     </div>
 
+    <button id="toggleAnswerLibraryBtn" class="secondary">
+      Show Answer Library
+    </button>
+
+    <div id="answerLibraryBox" class="create-candidate-box hidden">
+      <div class="result-title">Candidate Answer Library</div>
+
+      <label>Question Key</label>
+      <select id="answerQuestionKey">
+        <option value="work_authorization">Work Authorization</option>
+        <option value="sponsorship">Sponsorship</option>
+        <option value="salary_expectation">Salary Expectation</option>
+        <option value="remote_preference">Remote / Hybrid Preference</option>
+        <option value="relocation">Relocation</option>
+        <option value="notice_period">Notice Period / Start Date</option>
+        <option value="travel">Travel</option>
+        <option value="security_clearance">Security Clearance</option>
+        <option value="timezone">Timezone</option>
+        <option value="custom">Custom</option>
+      </select>
+
+      <label>Question Label</label>
+      <input
+        id="answerQuestionLabel"
+        type="text"
+        placeholder="Example: Are you authorized to work in the United States?"
+      />
+
+      <label>Saved Answer</label>
+      <textarea
+        id="answerText"
+        placeholder="Example: Yes, I am authorized to work in the United States."
+      ></textarea>
+
+      <label>Answer Type</label>
+      <select id="answerType">
+        <option value="short">Short</option>
+        <option value="sentence">Sentence</option>
+        <option value="paragraph">Paragraph</option>
+      </select>
+
+      <button id="saveCandidateAnswerBtn">Save Answer</button>
+      <button id="loadCandidateAnswersBtn" class="secondary">
+        Load Saved Answers
+      </button>
+
+      <div id="candidateAnswersOutput" class="output-text"></div>
+    </div>
+
     <div id="candidatePreview" class="candidate-preview hidden"></div>
 
     <label>Company Name</label>

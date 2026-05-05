@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from database import Base, engine, get_db
-from models import Candidate, Application, GoogleSheetsSyncLog, SlackReportLog
+from models import Candidate, Application, GoogleSheetsSyncLog, SlackReportLog, CandidateAnswer
 from schemas import (
     CandidateCreate,
     CandidateResponse,
@@ -26,7 +26,10 @@ from schemas import (
     ScreeningField,
     ScreeningAutofillRequest,
     ScreeningAutofillAnswer,
-    ScreeningAutofillResponse
+    ScreeningAutofillResponse,
+    CandidateAnswerCreate,
+    CandidateAnswerUpdate,
+    CandidateAnswerResponse
 )
 
 from services.url_service import preserve_original_url, create_canonical_url
@@ -78,6 +81,102 @@ def create_candidate(candidate: CandidateCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_candidate)
     return new_candidate
+
+@app.post("/candidates/{candidate_id}/answers", response_model=CandidateAnswerResponse)
+def create_candidate_answer(
+    candidate_id: int,
+    answer_req: CandidateAnswerCreate,
+    db: Session = Depends(get_db)
+):
+    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    new_answer = CandidateAnswer(
+        candidate_id=candidate_id,
+        question_key=answer_req.question_key,
+        question_label=answer_req.question_label,
+        answer=answer_req.answer,
+        answer_type=answer_req.answer_type or "short"
+    )
+
+    db.add(new_answer)
+    db.commit()
+    db.refresh(new_answer)
+
+    return new_answer
+
+
+@app.get("/candidates/{candidate_id}/answers", response_model=list[CandidateAnswerResponse])
+def list_candidate_answers(
+    candidate_id: int,
+    db: Session = Depends(get_db)
+):
+    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    answers = db.query(CandidateAnswer).filter(
+        CandidateAnswer.candidate_id == candidate_id
+    ).order_by(CandidateAnswer.created_at.desc()).all()
+
+    return answers
+
+
+@app.patch("/candidate-answers/{answer_id}", response_model=CandidateAnswerResponse)
+def update_candidate_answer(
+    answer_id: int,
+    answer_req: CandidateAnswerUpdate,
+    db: Session = Depends(get_db)
+):
+    saved_answer = db.query(CandidateAnswer).filter(
+        CandidateAnswer.id == answer_id
+    ).first()
+
+    if not saved_answer:
+        raise HTTPException(status_code=404, detail="Candidate answer not found")
+
+    if answer_req.question_key is not None:
+        saved_answer.question_key = answer_req.question_key
+
+    if answer_req.question_label is not None:
+        saved_answer.question_label = answer_req.question_label
+
+    if answer_req.answer is not None:
+        saved_answer.answer = answer_req.answer
+
+    if answer_req.answer_type is not None:
+        saved_answer.answer_type = answer_req.answer_type
+
+    saved_answer.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(saved_answer)
+
+    return saved_answer
+
+
+@app.delete("/candidate-answers/{answer_id}")
+def delete_candidate_answer(
+    answer_id: int,
+    db: Session = Depends(get_db)
+):
+    saved_answer = db.query(CandidateAnswer).filter(
+        CandidateAnswer.id == answer_id
+    ).first()
+
+    if not saved_answer:
+        raise HTTPException(status_code=404, detail="Candidate answer not found")
+
+    db.delete(saved_answer)
+    db.commit()
+
+    return {
+        "message": "Candidate answer deleted",
+        "answer_id": answer_id
+    }
 
 @app.get("/candidates", response_model=list[CandidateResponse])
 def list_candidates(db: Session = Depends(get_db)):
@@ -868,6 +967,98 @@ def detect_job_page(req: JobPageDetectRequest):
         "reason": result.get("reason")
     }
 
+def normalize_question_text(text: str) -> str:
+    return " ".join((text or "").lower().replace("?", " ").replace(".", " ").split())
+
+
+def saved_answer_matches_question(saved_answer: CandidateAnswer, question: str) -> bool:
+    question_norm = normalize_question_text(question)
+    label_norm = normalize_question_text(saved_answer.question_label)
+    key_norm = normalize_question_text(saved_answer.question_key)
+
+    if not question_norm:
+        return False
+
+    # Direct label match
+    if label_norm and (label_norm in question_norm or question_norm in label_norm):
+        return True
+
+    # Key-based matching
+    key_aliases = {
+        "work_authorization": [
+            "authorized",
+            "authorization",
+            "eligible to work",
+            "legally authorized",
+            "work in the united states",
+            "work in us",
+            "work in the us"
+        ],
+        "sponsorship": [
+            "sponsorship",
+            "sponsor",
+            "visa",
+            "now or in the future",
+            "require sponsorship"
+        ],
+        "salary_expectation": [
+            "salary",
+            "compensation",
+            "expected pay",
+            "pay range",
+            "desired salary"
+        ],
+        "remote_preference": [
+            "remote",
+            "hybrid",
+            "onsite",
+            "work from home"
+        ],
+        "relocation": [
+            "relocate",
+            "relocation",
+            "willing to move"
+        ],
+        "notice_period": [
+            "notice period",
+            "start date",
+            "available to start",
+            "availability"
+        ],
+        "travel": [
+            "travel",
+            "willing to travel"
+        ],
+        "security_clearance": [
+            "security clearance",
+            "clearance"
+        ],
+        "timezone": [
+            "timezone",
+            "time zone",
+            "working hours"
+        ]
+    }
+
+    aliases = key_aliases.get(saved_answer.question_key, [])
+
+    if any(alias in question_norm for alias in aliases):
+        return True
+
+    # If key itself appears in the question after normalization
+    if key_norm and key_norm in question_norm:
+        return True
+
+    return False
+
+
+def find_saved_answer_for_question(saved_answers: list[CandidateAnswer], question: str):
+    for saved_answer in saved_answers:
+        if saved_answer_matches_question(saved_answer, question):
+            return saved_answer
+
+    return None
+
 @app.post("/screening/autofill-answers", response_model=ScreeningAutofillResponse)
 def generate_screening_autofill_answers(
     req: ScreeningAutofillRequest,
@@ -877,6 +1068,10 @@ def generate_screening_autofill_answers(
 
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
+
+    saved_answers = db.query(CandidateAnswer).filter(
+        CandidateAnswer.candidate_id == req.candidate_id
+    ).all()
 
     questions = [field.label for field in req.fields]
 
@@ -910,6 +1105,19 @@ def generate_screening_autofill_answers(
     answers = []
 
     for index, field in enumerate(req.fields):
+        saved_answer = find_saved_answer_for_question(saved_answers, field.label)
+
+        if saved_answer:
+            answers.append({
+                "fieldId": field.fieldId,
+                "fieldType": field.fieldType,
+                "question": field.label,
+                "answer": saved_answer.answer,
+                "confidence": "High",
+                "manual_review_required": False
+            })
+            continue
+
         answer_item = parsed_answers[index] if index < len(parsed_answers) else {}
 
         answers.append({

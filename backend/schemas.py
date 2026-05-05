@@ -163,3 +163,31 @@ class ScreeningAutofillAnswer(BaseModel):
 class ScreeningAutofillResponse(BaseModel):
     answers: List[ScreeningAutofillAnswer]
 
+class CandidateAnswerCreate(BaseModel):
+    question_key: str
+    question_label: str
+    answer: str
+    answer_type: Optional[str] = "short"
+
+
+class CandidateAnswerUpdate(BaseModel):
+    question_key: Optional[str] = None
+    question_label: Optional[str] = None
+    answer: Optional[str] = None
+    answer_type: Optional[str] = None
+
+
+class CandidateAnswerResponse(BaseModel):
+    id: int
+    candidate_id: int
+
+    question_key: str
+    question_label: str
+    answer: str
+    answer_type: str
+
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

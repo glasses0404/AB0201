@@ -1,5 +1,23 @@
 const API_BASE_URL = "http://127.0.0.1:8000";
 
+const toggleAnswerLibraryBtn = document.getElementById(
+  "toggleAnswerLibraryBtn",
+);
+const answerLibraryBox = document.getElementById("answerLibraryBox");
+const answerQuestionKeyInput = document.getElementById("answerQuestionKey");
+const answerQuestionLabelInput = document.getElementById("answerQuestionLabel");
+const answerTextInput = document.getElementById("answerText");
+const answerTypeInput = document.getElementById("answerType");
+const saveCandidateAnswerBtn = document.getElementById(
+  "saveCandidateAnswerBtn",
+);
+const loadCandidateAnswersBtn = document.getElementById(
+  "loadCandidateAnswersBtn",
+);
+const candidateAnswersOutput = document.getElementById(
+  "candidateAnswersOutput",
+);
+
 const resumeFileInput = document.getElementById("resumeFileInput");
 const saveResumeFileBtn = document.getElementById("saveResumeFileBtn");
 const uploadResumeToPageBtn = document.getElementById("uploadResumeToPageBtn");
@@ -384,6 +402,64 @@ function renderRecentApplications(applications) {
       }
     });
   });
+}
+
+async function createCandidateAnswer(candidateId, payload) {
+  const response = await fetch(
+    `${API_BASE_URL}/candidates/${candidateId}/answers`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
+
+  return await response.json();
+}
+
+async function getCandidateAnswers(candidateId) {
+  const response = await fetch(
+    `${API_BASE_URL}/candidates/${candidateId}/answers`,
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
+
+  return await response.json();
+}
+
+function formatCandidateAnswers(answers) {
+  if (!answers.length) {
+    return "No saved answers found for this candidate.";
+  }
+
+  return answers
+    .map((answer) => {
+      return `
+#${answer.id} - ${answer.question_key}
+Question: ${answer.question_label}
+Answer: ${answer.answer}
+Type: ${answer.answer_type}
+Updated: ${formatDateTime(answer.updated_at)}
+`.trim();
+    })
+    .join("\n\n----------------------\n\n");
+}
+
+function clearCandidateAnswerForm() {
+  answerQuestionKeyInput.value = "work_authorization";
+  answerQuestionLabelInput.value = "";
+  answerTextInput.value = "";
+  answerTypeInput.value = "short";
 }
 
 async function uploadSavedResumeForSelectedCandidateToPage() {
@@ -1232,6 +1308,79 @@ function getOverrideData() {
     overrideBy: overrideByInput.value.trim(),
     overrideReason: overrideReasonInput.value.trim(),
   };
+}
+if (toggleAnswerLibraryBtn) {
+  toggleAnswerLibraryBtn.addEventListener("click", () => {
+    const isHidden = answerLibraryBox.classList.contains("hidden");
+
+    if (isHidden) {
+      answerLibraryBox.classList.remove("hidden");
+      toggleAnswerLibraryBtn.innerText = "Hide Answer Library";
+    } else {
+      answerLibraryBox.classList.add("hidden");
+      toggleAnswerLibraryBtn.innerText = "Show Answer Library";
+    }
+  });
+}
+
+if (saveCandidateAnswerBtn) {
+  saveCandidateAnswerBtn.addEventListener("click", async () => {
+    try {
+      const candidateId = getSelectedCandidateId();
+
+      if (!candidateId) {
+        setStatus("Please select a candidate first.", "error");
+        return;
+      }
+
+      const payload = {
+        question_key: answerQuestionKeyInput.value,
+        question_label: answerQuestionLabelInput.value.trim(),
+        answer: answerTextInput.value.trim(),
+        answer_type: answerTypeInput.value,
+      };
+
+      if (!payload.question_label || !payload.answer) {
+        setStatus("Question label and answer are required.", "error");
+        return;
+      }
+
+      setStatus("Saving candidate answer...", "success");
+
+      await createCandidateAnswer(candidateId, payload);
+
+      clearCandidateAnswerForm();
+
+      const answers = await getCandidateAnswers(candidateId);
+      candidateAnswersOutput.innerText = formatCandidateAnswers(answers);
+
+      setStatus("Candidate answer saved.", "success");
+    } catch (error) {
+      console.error(error);
+      setStatus("Save answer error: " + error.message, "error");
+    }
+  });
+}
+
+if (loadCandidateAnswersBtn) {
+  loadCandidateAnswersBtn.addEventListener("click", async () => {
+    try {
+      const candidateId = getSelectedCandidateId();
+
+      if (!candidateId) {
+        setStatus("Please select a candidate first.", "error");
+        return;
+      }
+
+      const answers = await getCandidateAnswers(candidateId);
+      candidateAnswersOutput.innerText = formatCandidateAnswers(answers);
+
+      setStatus("Candidate answers loaded.", "success");
+    } catch (error) {
+      console.error(error);
+      setStatus("Load answers error: " + error.message, "error");
+    }
+  });
 }
 
 if (slackLogsBtn) {
