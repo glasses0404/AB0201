@@ -131,7 +131,12 @@ def create_application(app_req: ApplicationCreate, db: Session = Depends(get_db)
         questions=app_req.screening_questions or []
     )
 
-    initial_status = "Duplicate" if duplicate_status == "Exact Duplicate" else "Draft Generated"
+    if duplicate_status == "Exact Duplicate":
+        initial_status = "Duplicate"
+    elif match_score is not None and match_score < 60:
+        initial_status = "Skipped - Low Match"
+    else:
+        initial_status = "Draft Generated"
 
     new_application = Application(
         candidate_id=app_req.candidate_id,
@@ -196,10 +201,20 @@ def update_application_status(
         raise HTTPException(status_code=404, detail="Application not found")
 
     if application.duplicate_status == "Exact Duplicate" and status_update.status == "Submitted":
-    raise HTTPException(
-        status_code=400,
-        detail="Exact duplicate applications cannot be marked as Submitted."
-    )
+        raise HTTPException(
+            status_code=400,
+            detail="Exact duplicate applications cannot be marked as Submitted."
+        )
+
+    if (
+        application.match_score is not None
+        and application.match_score < 60
+        and status_update.status == "Submitted"
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Low match applications cannot be marked as Submitted."
+        )
 
     application.status = status_update.status
 

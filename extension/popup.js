@@ -47,6 +47,7 @@ const dailyReportOutput = document.getElementById("dailyReportOutput");
 const resultBox = document.getElementById("resultBox");
 const applicationIdEl = document.getElementById("applicationId");
 const matchScoreEl = document.getElementById("matchScore");
+const lowMatchWarningBox = document.getElementById("lowMatchWarningBox");
 const duplicateStatusEl = document.getElementById("duplicateStatus");
 const duplicateWarningBox = document.getElementById("duplicateWarningBox");
 const applicationStatusEl = document.getElementById("applicationStatus");
@@ -66,6 +67,42 @@ let currentPageData = null;
 let latestCandidateProfile = null;
 let latestApplicationDraft = null;
 let allCandidates = [];
+
+function showLowMatchWarning(matchScore) {
+  lowMatchWarningBox.classList.remove("hidden", "block", "review", "good");
+
+  if (matchScore === null || matchScore === undefined) {
+    lowMatchWarningBox.classList.add("hidden");
+    lowMatchWarningBox.innerHTML = "";
+    return;
+  }
+
+  const score = Number(matchScore);
+
+  if (score < 60) {
+    lowMatchWarningBox.classList.add("block");
+    lowMatchWarningBox.innerHTML = `
+      <strong>Low Match Score</strong><br>
+      Match score is below 60%. This application should not be submitted unless a manager reviews and approves it.
+    `;
+    return;
+  }
+
+  if (score >= 60 && score < 75) {
+    lowMatchWarningBox.classList.add("review");
+    lowMatchWarningBox.innerHTML = `
+      <strong>Medium Match Score</strong><br>
+      Match score is between 60% and 75%. Please review carefully before submitting.
+    `;
+    return;
+  }
+
+  lowMatchWarningBox.classList.add("good");
+  lowMatchWarningBox.innerHTML = `
+    <strong>Good Match Score</strong><br>
+    Match score is 75% or higher.
+  `;
+}
 
 function showDuplicateWarning(duplicateStatus) {
   duplicateWarningBox.classList.remove("hidden", "exact", "possible", "unique");
@@ -457,6 +494,8 @@ function displayApplicationDraft(result) {
       ? `${result.match_score}%`
       : "-";
 
+  showLowMatchWarning(result.match_score);
+
   duplicateStatusEl.innerText = result.duplicate_status || "-";
   showDuplicateWarning(result.duplicate_status);
 
@@ -472,6 +511,16 @@ function displayApplicationDraft(result) {
 
   if (result.duplicate_status === "Exact Duplicate" && statusSelect) {
     statusSelect.value = "Duplicate";
+  }
+
+  if (
+    result.duplicate_status !== "Exact Duplicate" &&
+    result.match_score !== null &&
+    result.match_score !== undefined &&
+    Number(result.match_score) < 60 &&
+    statusSelect
+  ) {
+    statusSelect.value = "Skipped - Low Match";
   }
 
   coverLetterOutput.innerText =
@@ -644,6 +693,19 @@ updateStatusBtn.addEventListener("click", async () => {
     ) {
       setStatus(
         "Blocked: Exact duplicate cannot be marked as Submitted. Use Duplicate status or ask manager to review.",
+        "error",
+      );
+      return;
+    }
+
+    if (
+      latestApplicationDraft.match_score !== null &&
+      latestApplicationDraft.match_score !== undefined &&
+      Number(latestApplicationDraft.match_score) < 60 &&
+      newStatus === "Submitted"
+    ) {
+      setStatus(
+        "Blocked: Match score is below 60%. Mark as Skipped - Low Match or ask a manager to review.",
         "error",
       );
       return;

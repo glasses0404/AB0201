@@ -173,6 +173,31 @@
         border: 1px solid #22c55e;
         color: #14532d;
       }
+      .low-match-warning {
+        margin-top: 8px;
+        padding: 9px;
+        border-radius: 6px;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .low-match-warning.block {
+        background: #fee2e2;
+        border: 1px solid #ef4444;
+        color: #7f1d1d;
+      }
+
+      .low-match-warning.review {
+        background: #fef3c7;
+        border: 1px solid #f59e0b;
+        color: #78350f;
+      }
+
+      .low-match-warning.good {
+        background: #dcfce7;
+        border: 1px solid #22c55e;
+        color: #14532d;
+      }
     </style>
   </head>
   <body>
@@ -333,6 +358,7 @@
         <span>Match Score:</span>
         <strong id="matchScore">-</strong>
       </div>
+      <div id="lowMatchWarningBox" class="low-match-warning hidden"></div>
 
       <div class="metric-row">
         <span>Duplicate:</span>
