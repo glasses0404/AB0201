@@ -23,13 +23,13 @@
       display: block;
     }
 
-    input, textarea, button {
-      width: 100%;
-      box-sizing: border-box;
-      margin-top: 5px;
-      padding: 8px;
-      font-size: 13px;
-    }
+    input, textarea, select, button {
+			width: 100%;
+			box-sizing: border-box;
+			margin-top: 5px;
+			padding: 8px;
+			font-size: 13px;
+		}
 
     textarea {
       min-height: 70px;
@@ -115,13 +115,31 @@
     .hidden {
       display: none;
     }
+
+		.candidate-preview {
+			margin-top: 8px;
+			padding: 8px;
+			background: #eef2ff;
+			border: 1px solid #c7d2fe;
+			border-radius: 6px;
+			font-size: 12px;
+			color: #1f2937;
+			line-height: 1.4;
+		}
   </style>
 </head>
 <body>
   <h2>Autobidder Assistant</h2>
 
-  <label>Candidate ID</label>
-  <input id="candidateId" type="number" placeholder="Example: 1" />
+  <label>Search Candidate</label>
+    <input id="candidateSearch" type="text" placeholder="Search by name, email, or location" />
+
+    <label>Select Candidate</label>
+    <select id="candidateSelect">
+    <option value="">Loading candidates...</option>
+    </select>
+
+<div id="candidatePreview" class="candidate-preview hidden"></div>
 
   <label>Company Name</label>
   <input id="companyName" type="text" placeholder="Example: HCA Healthcare" />

@@ -1,6 +1,9 @@
 const API_BASE_URL = "http://127.0.0.1:8000";
 
-const candidateIdInput = document.getElementById("candidateId");
+const candidateSearchInput = document.getElementById("candidateSearch");
+const candidateSelect = document.getElementById("candidateSelect");
+const candidatePreview = document.getElementById("candidatePreview");
+
 const companyNameInput = document.getElementById("companyName");
 const jobTitleInput = document.getElementById("jobTitle");
 const screeningQuestionsInput = document.getElementById("screeningQuestions");
@@ -22,6 +25,7 @@ const copyScreeningAnswersBtn = document.getElementById("copyScreeningAnswersBtn
 let currentPageData = null;
 let latestCandidateProfile = null;
 let latestApplicationDraft = null;
+let allCandidates = [];
 
 function setStatus(message, type = "success") {
   statusDiv.className = type;
@@ -58,6 +62,11 @@ function parseScreeningQuestions(rawText) {
     .filter(q => q.length > 0);
 }
 
+function getSelectedCandidateId() {
+  const value = candidateSelect.value;
+  return value ? Number(value) : null;
+}
+
 async function getCandidate(candidateId) {
   const response = await fetch(`${API_BASE_URL}/candidates/${candidateId}`);
 
@@ -66,6 +75,123 @@ async function getCandidate(candidateId) {
   }
 
   return await response.json();
+}
+
+async function loadCandidates() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/candidates`);
+
+    if (!response.ok) {
+      throw new Error("Could not load candidates");
+    }
+
+    allCandidates = await response.json();
+
+    renderCandidateOptions(allCandidates);
+
+    if (allCandidates.length === 0) {
+      setStatus("No candidates found. Create a candidate from /docs first.", "error");
+    }
+  } catch (error) {
+    console.error(error);
+    candidateSelect.innerHTML = `<option value="">Could not load candidates</option>`;
+    setStatus("Candidate load error: " + error.message, "error");
+  }
+}
+
+function renderCandidateOptions(candidates) {
+  candidateSelect.innerHTML = "";
+
+  if (!candidates.length) {
+    candidateSelect.innerHTML = `<option value="">No candidates found</option>`;
+    candidatePreview.classList.add("hidden");
+    return;
+  }
+
+  const emptyOption = document.createElement("option");
+  emptyOption.value = "";
+  emptyOption.textContent = "Select a candidate";
+  candidateSelect.appendChild(emptyOption);
+
+  candidates.forEach(candidate => {
+    const option = document.createElement("option");
+    option.value = candidate.id;
+
+    const name = `${candidate.first_name || ""} ${candidate.last_name || ""}`.trim();
+    const location = candidate.location ? ` - ${candidate.location}` : "";
+    const email = candidate.email ? ` - ${candidate.email}` : "";
+
+    option.textContent = `#${candidate.id} - ${name}${location}${email}`;
+    candidateSelect.appendChild(option);
+  });
+
+  if (candidates.length === 1) {
+    candidateSelect.value = candidates[0].id;
+    updateCandidatePreview();
+  }
+}
+
+function filterCandidates(searchText) {
+  const q = searchText.toLowerCase().trim();
+
+  if (!q) {
+    renderCandidateOptions(allCandidates);
+    return;
+  }
+
+  const filtered = allCandidates.filter(candidate => {
+    const text = [
+      candidate.id,
+      candidate.first_name,
+      candidate.last_name,
+      candidate.email,
+      candidate.phone,
+      candidate.location,
+      candidate.linkedin,
+      candidate.github,
+      candidate.work_authorization
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return text.includes(q);
+  });
+
+  renderCandidateOptions(filtered);
+}
+
+function updateCandidatePreview() {
+  const candidateId = getSelectedCandidateId();
+
+  if (!candidateId) {
+    candidatePreview.classList.add("hidden");
+    candidatePreview.innerHTML = "";
+    latestCandidateProfile = null;
+    return;
+  }
+
+  const candidate = allCandidates.find(c => c.id === candidateId);
+
+  if (!candidate) {
+    candidatePreview.classList.add("hidden");
+    candidatePreview.innerHTML = "";
+    latestCandidateProfile = null;
+    return;
+  }
+
+  latestCandidateProfile = candidate;
+
+  const name = `${candidate.first_name || ""} ${candidate.last_name || ""}`.trim();
+
+  candidatePreview.classList.remove("hidden");
+  candidatePreview.innerHTML = `
+    <strong>${name}</strong><br>
+    ${candidate.email || "No email"} | ${candidate.phone || "No phone"}<br>
+    ${candidate.location || "No location"}<br>
+    Work Auth: ${candidate.work_authorization || "Not provided"}<br>
+    Sponsorship: ${candidate.sponsorship_required || "Not provided"}
+  `;
 }
 
 function safeJsonPretty(value) {
@@ -106,17 +232,25 @@ async function copyToClipboard(text, successMessage) {
   setStatus(successMessage, "success");
 }
 
+candidateSearchInput.addEventListener("input", () => {
+  filterCandidates(candidateSearchInput.value);
+});
+
+candidateSelect.addEventListener("change", () => {
+  updateCandidatePreview();
+});
+
 captureBtn.addEventListener("click", async () => {
   try {
     setStatus("Generating application draft...", "success");
     resultBox.classList.add("hidden");
 
-    const candidateId = Number(candidateIdInput.value);
+    const candidateId = getSelectedCandidateId();
     const companyName = companyNameInput.value.trim();
     const jobTitle = jobTitleInput.value.trim();
 
     if (!candidateId || !companyName || !jobTitle) {
-      setStatus("Please enter Candidate ID, Company Name, and Job Title.", "error");
+      setStatus("Please select Candidate, Company Name, and Job Title.", "error");
       return;
     }
 
@@ -166,10 +300,10 @@ captureBtn.addEventListener("click", async () => {
 
 autofillBtn.addEventListener("click", async () => {
   try {
-    const candidateId = Number(candidateIdInput.value);
+    const candidateId = getSelectedCandidateId();
 
     if (!candidateId) {
-      setStatus("Please enter Candidate ID first.", "error");
+      setStatus("Please select a candidate first.", "error");
       return;
     }
 
@@ -205,3 +339,4 @@ copyScreeningAnswersBtn.addEventListener("click", async () => {
 });
 
 loadCurrentUrl();
+loadCandidates();
