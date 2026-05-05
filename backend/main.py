@@ -194,6 +194,9 @@ def update_application_status(
 
     application.status = status_update.status
 
+    if status_update.status == "Submitted" and not application.submitted_at:
+        application.submitted_at = datetime.utcnow()
+
     db.commit()
     db.refresh(application)
 

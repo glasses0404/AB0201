@@ -43,6 +43,7 @@ const applicationIdEl = document.getElementById("applicationId");
 const matchScoreEl = document.getElementById("matchScore");
 const duplicateStatusEl = document.getElementById("duplicateStatus");
 const applicationStatusEl = document.getElementById("applicationStatus");
+const submittedAtEl = document.getElementById("submittedAt");
 const statusSelect = document.getElementById("statusSelect");
 const updateStatusBtn = document.getElementById("updateStatusBtn");
 const coverLetterOutput = document.getElementById("coverLetterOutput");
@@ -343,6 +344,10 @@ function displayApplicationDraft(result) {
 
   duplicateStatusEl.innerText = result.duplicate_status || "-";
   applicationStatusEl.innerText = result.status || "-";
+
+  submittedAtEl.innerText = result.submitted_at
+    ? new Date(result.submitted_at).toLocaleString()
+    : "-";
 
   if (statusSelect && result.status) {
     statusSelect.value = result.status;

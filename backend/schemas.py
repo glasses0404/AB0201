@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, List
+from datetime import datetime
 
 
 class CandidateCreate(BaseModel):
@@ -49,6 +50,8 @@ class ApplicationResponse(BaseModel):
     cover_letter: Optional[str]
     screening_answers: Optional[str]
     status: str
+    submitted_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
