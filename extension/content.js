@@ -226,6 +226,104 @@ function createAutobidderFloatingPanel() {
     color: #991b1b;
     font-weight: bold;
   }
+      .autobidder-job-info-layout {
+    display: grid;
+    grid-template-columns: 1fr 118px;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .autobidder-job-info-left {
+    line-height: 1.45;
+    min-width: 0;
+  }
+
+  .autobidder-score-card {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 86px;
+  }
+
+  .autobidder-score-placeholder {
+    width: 96px;
+    height: 66px;
+    border: 1px dashed #d1d5db;
+    border-radius: 10px;
+    color: #6b7280;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    line-height: 1.3;
+    background: #ffffff;
+  }
+
+  .autobidder-gauge-wrap {
+    width: 105px;
+    text-align: center;
+  }
+
+  .autobidder-gauge {
+    position: relative;
+    width: 86px;
+    height: 45px;
+    overflow: hidden;
+    margin: 0 auto 2px auto;
+  }
+
+  .autobidder-gauge-bg {
+    position: absolute;
+    width: 86px;
+    height: 86px;
+    border: 9px solid #e5e7eb;
+    border-radius: 50%;
+    box-sizing: border-box;
+  }
+
+  .autobidder-gauge-fill {
+    position: absolute;
+    width: 86px;
+    height: 86px;
+    border: 9px solid #2563eb;
+    border-radius: 50%;
+    box-sizing: border-box;
+    clip-path: inset(0 0 50% 0);
+    transform-origin: 50% 50%;
+    transition: transform 0.5s ease;
+  }
+
+  .autobidder-gauge-center {
+    position: absolute;
+    left: 30px;
+    top: 24px;
+    width: 26px;
+    height: 26px;
+    background: #111827;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .autobidder-gauge-check {
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+  }
+
+  .autobidder-score-number {
+    font-size: 20px;
+    font-weight: bold;
+    line-height: 1.1;
+  }
+
+  .autobidder-score-label {
+    font-size: 11px;
+    color: #4b5563;
+    margin-top: 1px;
+  }
 `;
 
   document.documentElement.appendChild(style);
@@ -913,6 +1011,24 @@ async function runAutobidderPageAnalysis() {
       created_by: active.bidderName || "On-page Assistant",
     };
 
+    jobInfoBox.innerHTML = `
+  <div class="autobidder-job-info-layout">
+    <div class="autobidder-job-info-left">
+      <strong>Job Posting Detected</strong><br>
+      Company: ${detection.company_name || "Unknown"}<br>
+      Title: ${detection.job_title || "Unknown"}<br>
+      ATS: ${atsType}<br>
+      Confidence: ${detection.confidence}
+    </div>
+
+    <div class="autobidder-score-card">
+      <div class="autobidder-score-placeholder">
+        Analyzing<br>Match...
+      </div>
+    </div>
+  </div>
+`;
+
     const applicationDraft = await postJson(
       `${AUTOBIDDER_API_BASE_URL}/applications`,
       applicationPayload,
@@ -958,6 +1074,13 @@ async function runAutobidderPageAnalysis() {
     } catch (error) {
       matchAnalysis = null;
     }
+
+    updateJobInfoWithMatchScore(
+      detection,
+      atsType,
+      applicationDraft,
+      matchAnalysis,
+    );
 
     const screeningPreview = screeningAnswerResult.answers.length
       ? screeningAnswerResult.answers
@@ -1982,13 +2105,22 @@ async function autoDetectAndShowAutobidderPanel() {
       const jobInfoBox = document.getElementById("autobidder-job-info");
 
       jobInfoBox.innerHTML = `
-    <strong>Job Posting Detected</strong><br>
-    Company: ${detection.company_name || "Unknown"}<br>
-    Title: ${detection.job_title || "Unknown"}<br>
-    ATS: ${atsType}<br>
-    Confidence: ${detection.confidence}
-  `;
+  <div class="autobidder-job-info-layout">
+    <div class="autobidder-job-info-left">
+      <strong>Job Posting Detected</strong><br>
+      Company: ${detection.company_name || "Unknown"}<br>
+      Title: ${detection.job_title || "Unknown"}<br>
+      ATS: ${atsType}<br>
+      Confidence: ${detection.confidence}
+    </div>
 
+    <div class="autobidder-score-card">
+      <div class="autobidder-score-placeholder">
+        Match<br>Pending
+      </div>
+    </div>
+  </div>
+`;
       await maybeStartAutoAnalysis();
     }
   } catch (error) {
@@ -2451,4 +2583,93 @@ function setMatchingCheckboxOption(answer) {
   checkbox.dispatchEvent(new Event("change", { bubbles: true }));
 
   return true;
+}
+
+function getScoreColor(score) {
+  const value = Number(score || 0);
+
+  if (value >= 85) {
+    return "#16a34a"; // green
+  }
+
+  if (value >= 70) {
+    return "#f59e0b"; // amber
+  }
+
+  return "#dc2626"; // red
+}
+
+function getScoreLabel(score) {
+  const value = Number(score || 0);
+
+  if (value >= 85) {
+    return "Apply";
+  }
+
+  if (value >= 70) {
+    return "Review";
+  }
+
+  return "Skip";
+}
+
+function renderMatchScoreGauge(score, recommendation) {
+  const safeScore = Math.max(0, Math.min(100, Number(score || 0)));
+  const color = getScoreColor(safeScore);
+  const label = recommendation || getScoreLabel(safeScore);
+
+  // Semicircle progress: 0 to 180 degrees
+  const rotation = Math.round((safeScore / 100) * 180);
+
+  return `
+    <div class="autobidder-gauge-wrap">
+      <div class="autobidder-gauge">
+        <div class="autobidder-gauge-bg"></div>
+        <div 
+          class="autobidder-gauge-fill"
+          style="transform: rotate(${rotation}deg); border-color: ${color};"
+        ></div>
+        <div class="autobidder-gauge-center">
+          <div class="autobidder-gauge-check">✓</div>
+        </div>
+      </div>
+
+      <div class="autobidder-score-number" style="color: ${color};">
+        ${safeScore}%
+      </div>
+      <div class="autobidder-score-label">
+        ${label}
+      </div>
+    </div>
+  `;
+}
+
+function updateJobInfoWithMatchScore(
+  detection,
+  atsType,
+  applicationDraft,
+  matchAnalysis,
+) {
+  const jobInfoBox = document.getElementById("autobidder-job-info");
+
+  if (!jobInfoBox) return;
+
+  const score = applicationDraft?.match_score ?? 0;
+  const recommendation = matchAnalysis?.recommendation || getScoreLabel(score);
+
+  jobInfoBox.innerHTML = `
+    <div class="autobidder-job-info-layout">
+      <div class="autobidder-job-info-left">
+        <strong>Job Posting Detected</strong><br>
+        Company: ${detection.company_name || applicationDraft?.company_name || "Unknown"}<br>
+        Title: ${detection.job_title || applicationDraft?.job_title || "Unknown"}<br>
+        ATS: ${atsType}<br>
+        Confidence: ${detection.confidence || "-"}
+      </div>
+
+      <div class="autobidder-score-card">
+        ${renderMatchScoreGauge(score, recommendation)}
+      </div>
+    </div>
+  `;
 }
