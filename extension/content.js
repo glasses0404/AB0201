@@ -30,7 +30,7 @@ function createAutobidderFloatingPanel() {
       </div>
 
       <div id="autobidder-header-actions">
-        <button id="autobidder-report-btn" title="Open report">Report</button>
+        <button id="autobidder-report-btn" title="Open report">⚑ Report</button>
         <button id="autobidder-settings-btn" title="Settings">⚙</button>
         <button id="autobidder-close-btn" title="Close">×</button>
       </div>
@@ -38,10 +38,21 @@ function createAutobidderFloatingPanel() {
 
     <div id="autobidder-panel-body">
       <div id="autobidder-work-mode">
-        <div id="autobidder-work-tabs" class="autobidder-tab-row">
-          <button class="autobidder-tab active" data-work-tab="autofill">Autofill</button>
-          <button class="autobidder-tab" data-work-tab="match">Match Score</button>
-          <button class="autobidder-tab" data-work-tab="profile">Profile</button>
+        <div id="autobidder-work-tabs" class="autobidder-tab-row autobidder-work-tab-row">
+          <button class="autobidder-tab active" data-work-tab="autofill">
+            <span class="autobidder-tab-icon">✎</span>
+            <span>Autofill</span>
+          </button>
+
+          <button class="autobidder-tab" data-work-tab="match">
+            <span class="autobidder-tab-icon">✓</span>
+            <span>Match Score</span>
+          </button>
+
+          <button class="autobidder-tab" data-work-tab="profile">
+            <span class="autobidder-tab-icon">◉</span>
+            <span>Profile</span>
+          </button>
         </div>
 
         <div id="autobidder-work-content">
@@ -91,12 +102,31 @@ function createAutobidderFloatingPanel() {
           <strong>Settings</strong>
         </div>
 
-        <div id="autobidder-settings-tabs" class="autobidder-tab-row">
-          <button class="autobidder-tab active" data-settings-tab="candidate">Candidate</button>
-          <button class="autobidder-tab" data-settings-tab="resume">Resume</button>
-          <button class="autobidder-tab" data-settings-tab="answers">Saved Answers</button>
-          <button class="autobidder-tab" data-settings-tab="integrations">Integrations</button>
-          <button class="autobidder-tab" data-settings-tab="preferences">Preferences</button>
+        <div id="autobidder-settings-tabs" class="autobidder-tab-row autobidder-settings-tab-row">
+          <button class="autobidder-tab active" data-settings-tab="candidate">
+            <span class="autobidder-tab-icon">👤</span>
+            <span>Candidate</span>
+          </button>
+
+          <button class="autobidder-tab" data-settings-tab="resume">
+            <span class="autobidder-tab-icon">📄</span>
+            <span>Resume</span>
+          </button>
+
+          <button class="autobidder-tab" data-settings-tab="answers">
+            <span class="autobidder-tab-icon">💬</span>
+            <span>Answers</span>
+          </button>
+
+          <button class="autobidder-tab" data-settings-tab="integrations">
+            <span class="autobidder-tab-icon">🔗</span>
+            <span>Integrations</span>
+          </button>
+
+          <button class="autobidder-tab" data-settings-tab="preferences">
+            <span class="autobidder-tab-icon">⚙</span>
+            <span>Preferences</span>
+          </button>
         </div>
 
         <div id="autobidder-settings-content">
@@ -514,15 +544,90 @@ function createAutobidderFloatingPanel() {
 
     .autobidder-tab-row {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
+      gap: 7px;
       margin-bottom: 10px;
+      background: #f8fafc;
+      border: 1px solid #eef2f7;
+      border-radius: 12px;
+      padding: 5px;
     }
 
-    #autobidder-settings-tabs {
+    .autobidder-work-tab-row {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .autobidder-settings-tab-row {
       grid-template-columns: repeat(2, 1fr);
-      max-height: 92px;
-      overflow-y: auto;
+      max-height: none;
+      overflow: visible;
+    }
+
+    .autobidder-settings-tab-row .autobidder-tab {
+      min-height: 30px;
+      padding: 7px 5px !important;
+      font-size: 11px !important;
+    }
+
+    .autobidder-tab {
+      border: 1px solid transparent !important;
+      background: transparent !important;
+      color: #6b7280 !important;
+      border-radius: 10px !important;
+      padding: 8px 7px !important;
+      cursor: pointer !important;
+      font-size: 12px !important;
+      font-weight: 700 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 5px !important;
+      min-height: 34px;
+      transition:
+        background 0.15s ease,
+        color 0.15s ease,
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        transform 0.12s ease;
+    }
+
+    .autobidder-tab:hover {
+      background: #ffffff !important;
+      color: #2563eb !important;
+      border-color: #dbeafe !important;
+    }
+
+    .autobidder-tab.active {
+      background: #ffffff !important;
+      color: #0891b2 !important;
+      border-color: #e5e7eb !important;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.10);
+    }
+
+    .autobidder-tab.active .autobidder-tab-icon {
+      color: #0891b2;
+    }
+
+    .autobidder-tab:active {
+      transform: scale(0.98);
+    }
+
+    .autobidder-tab:disabled,
+    .autobidder-tab.disabled {
+      opacity: 0.45 !important;
+      cursor: not-allowed !important;
+      background: transparent !important;
+      color: #9ca3af !important;
+      box-shadow: none !important;
+    }
+
+    .autobidder-tab-icon {
+      font-size: 13px;
+      line-height: 1;
+      color: #9ca3af;
+    }
+
+    .autobidder-tab span:last-child {
+      white-space: nowrap;
     }
     
     #autobidder-settings-header-row {
@@ -558,23 +663,6 @@ function createAutobidderFloatingPanel() {
       margin-bottom: 10px;
       font-size: 12px;
       line-height: 1.45;
-    }
-
-    .autobidder-tab {
-      border: 1px solid #e5e7eb;
-      background: #f9fafb;
-      color: #4b5563;
-      border-radius: 9px;
-      padding: 8px 6px;
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: bold;
-    }
-
-    .autobidder-tab.active {
-      background: #eff6ff;
-      color: #1d4ed8;
-      border-color: #bfdbfe;
     }
 
     .autobidder-tab-panel {
@@ -885,7 +973,9 @@ function setActiveWorkTab(tabName) {
   autobidderActiveWorkTab = tabName;
 
   document.querySelectorAll("[data-work-tab]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.workTab === tabName);
+    const isActive = button.dataset.workTab === tabName;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-selected", isActive ? "true" : "false");
   });
 
   document
@@ -905,7 +995,9 @@ function setActiveSettingsTab(tabName) {
   autobidderActiveSettingsTab = tabName;
 
   document.querySelectorAll("[data-settings-tab]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.settingsTab === tabName);
+    const isActive = button.dataset.settingsTab === tabName;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-selected", isActive ? "true" : "false");
   });
 
   document
@@ -4625,4 +4717,13 @@ function bindPreferencesSettingsEvents() {
       }
     });
   }
+}
+
+function setWorkTabDisabled(tabName, disabled) {
+  const button = document.querySelector(`[data-work-tab="${tabName}"]`);
+
+  if (!button) return;
+
+  button.disabled = disabled;
+  button.classList.toggle("disabled", disabled);
 }
