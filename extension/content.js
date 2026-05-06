@@ -2,6 +2,8 @@ const AUTOBIDDER_API_BASE_URL = "http://127.0.0.1:8000";
 
 let autobidderDetectedJobPage = null;
 let autobidderFloatingPanel = null;
+let autobidderAutoAnalysisStarted = false;
+let autobidderLatestScreeningFields = [];
 
 function createAutobidderFloatingPanel() {
   if (document.getElementById("autobidder-floating-panel")) {
@@ -573,8 +575,49 @@ function fillScreeningAnswers(answers) {
     if (answer.manual_review_required) {
       skipped.push({
         fieldId: answer.fieldId,
+        question: answer.question,
         reason: "Manual review required",
       });
+      return;
+    }
+
+    if (answer.fieldType === "radio") {
+      const clicked = clickMatchingRadioOption(answer);
+
+      if (clicked) {
+        filled.push({
+          fieldId: answer.fieldId,
+          question: answer.question,
+          value: answer.selected_option_label || answer.answer,
+        });
+      } else {
+        skipped.push({
+          fieldId: answer.fieldId,
+          question: answer.question,
+          reason: "No matching radio option",
+        });
+      }
+
+      return;
+    }
+
+    if (answer.fieldType === "checkbox") {
+      const checked = setMatchingCheckboxOption(answer);
+
+      if (checked) {
+        filled.push({
+          fieldId: answer.fieldId,
+          question: answer.question,
+          value: answer.selected_option_label || answer.answer,
+        });
+      } else {
+        skipped.push({
+          fieldId: answer.fieldId,
+          question: answer.question,
+          reason: "Checkbox field not found",
+        });
+      }
+
       return;
     }
 
@@ -585,71 +628,51 @@ function fillScreeningAnswers(answers) {
     if (!field) {
       skipped.push({
         fieldId: answer.fieldId,
+        question: answer.question,
         reason: "Field not found",
       });
       return;
     }
 
-    if (field?.type === "radio" || answer.fieldType === "radio") {
-      const clicked = clickMatchingRadio(answer.fieldId, answer.answer);
-
-      if (clicked) {
-        filled.push(answer.fieldId);
-      } else {
-        skipped.push({
-          fieldId: answer.fieldId,
-          reason: "No matching radio option",
-        });
-      }
-
-      return;
-    }
-
-    if (field?.type === "checkbox" || answer.fieldType === "checkbox") {
-      const checked = setMatchingCheckbox(answer.fieldId, answer.answer);
-
-      if (checked) {
-        filled.push(answer.fieldId);
-      } else {
-        skipped.push({
-          fieldId: answer.fieldId,
-          reason: "Checkbox field not found",
-        });
-      }
-
-      return;
-    }
-
     const tag = field.tagName.toLowerCase();
 
-    if (tag === "textarea" || tag === "input") {
-      setNativeValue(field, answer.answer);
-      filled.push(answer.fieldId);
-      return;
-    }
-
     if (tag === "select") {
-      const options = Array.from(field.options);
-      const target = answer.answer.toLowerCase();
+      const selected = setMatchingSelectOption(field, answer);
 
-      const matchingOption = options.find(
-        (option) =>
-          option.textContent.trim().toLowerCase() === target ||
-          option.value.trim().toLowerCase() === target ||
-          target.includes(option.textContent.trim().toLowerCase()),
-      );
-
-      if (matchingOption) {
-        field.value = matchingOption.value;
-        field.dispatchEvent(new Event("change", { bubbles: true }));
-        filled.push(answer.fieldId);
+      if (selected) {
+        filled.push({
+          fieldId: answer.fieldId,
+          question: answer.question,
+          value: answer.selected_option_label || answer.answer,
+        });
       } else {
         skipped.push({
           fieldId: answer.fieldId,
+          question: answer.question,
           reason: "No matching select option",
         });
       }
+
+      return;
     }
+
+    if (tag === "textarea" || tag === "input") {
+      setNativeValue(field, answer.answer);
+
+      filled.push({
+        fieldId: answer.fieldId,
+        question: answer.question,
+        value: answer.answer,
+      });
+
+      return;
+    }
+
+    skipped.push({
+      fieldId: answer.fieldId,
+      question: answer.question,
+      reason: "Unsupported field type",
+    });
   });
 
   return {
@@ -657,6 +680,37 @@ function fillScreeningAnswers(answers) {
     filled,
     skipped,
   };
+}
+
+async function hasActiveCandidateAndBidder() {
+  const active = await getActiveCandidateFromStorage();
+
+  return Boolean(active && active.candidateId);
+}
+
+async function maybeStartAutoAnalysis() {
+  if (autobidderAutoAnalysisStarted) {
+    return;
+  }
+
+  const hasActiveCandidate = await hasActiveCandidateAndBidder();
+
+  if (!hasActiveCandidate) {
+    const resultBox = document.getElementById("autobidder-result-box");
+
+    if (resultBox) {
+      resultBox.innerText =
+        "Select an active candidate in the extension popup first. Then refresh this job page.";
+    }
+
+    return;
+  }
+
+  autobidderAutoAnalysisStarted = true;
+
+  setTimeout(async () => {
+    await runAutobidderPageAnalysis();
+  }, 500);
 }
 
 async function getActiveCandidateFromStorage() {
@@ -837,28 +891,9 @@ async function runAutobidderPageAnalysis() {
 
     setPanelStep("Detecting screening questions...");
 
-    let screeningFields = [];
+    const screeningFields = detectAllScreeningFieldsForAts(atsType);
 
-    if (typeof detectAllScreeningFieldsForAts === "function") {
-      screeningFields = detectAllScreeningFieldsForAts(atsType);
-    } else if (
-      atsType === "greenhouse" &&
-      typeof detectGreenhouseScreeningFields === "function"
-    ) {
-      screeningFields = detectGreenhouseScreeningFields();
-    } else if (
-      atsType === "lever" &&
-      typeof detectLeverScreeningFields === "function"
-    ) {
-      screeningFields = detectLeverScreeningFields();
-    } else if (
-      atsType === "ashby" &&
-      typeof detectAshbyScreeningFields === "function"
-    ) {
-      screeningFields = detectAshbyScreeningFields();
-    } else {
-      screeningFields = detectScreeningFields();
-    }
+    autobidderLatestScreeningFields = screeningFields;
 
     addPanelLog(
       `Detected ${screeningFields.length} screening questions`,
@@ -909,6 +944,7 @@ async function runAutobidderPageAnalysis() {
     chrome.storage.local.set({
       latestOnPageApplicationDraft: applicationDraft,
       latestOnPageScreeningAnswers: screeningAnswerResult.answers,
+      latestOnPageScreeningFields: screeningFields,
     });
 
     setPanelStep("Rendering results...");
@@ -1008,14 +1044,41 @@ async function getSavedResumeFileForCandidateFromStorage(candidateId) {
   });
 }
 
+function dedupeScreeningFields(fields) {
+  const seen = new Set();
+  const result = [];
+
+  fields.forEach((field) => {
+    const key = `${field.fieldType}-${field.label}`.toLowerCase();
+
+    if (seen.has(key)) {
+      return;
+    }
+
+    seen.add(key);
+    result.push(field);
+  });
+
+  return result;
+}
+
 function detectAllScreeningFieldsForAts(atsType) {
   let fields = [];
 
-  if (atsType === "greenhouse") {
+  if (
+    atsType === "greenhouse" &&
+    typeof detectGreenhouseScreeningFields === "function"
+  ) {
     fields = detectGreenhouseScreeningFields();
-  } else if (atsType === "lever") {
+  } else if (
+    atsType === "lever" &&
+    typeof detectLeverScreeningFields === "function"
+  ) {
     fields = detectLeverScreeningFields();
-  } else if (atsType === "ashby") {
+  } else if (
+    atsType === "ashby" &&
+    typeof detectAshbyScreeningFields === "function"
+  ) {
     fields = detectAshbyScreeningFields();
   } else {
     fields = detectScreeningFields();
@@ -1023,7 +1086,7 @@ function detectAllScreeningFieldsForAts(atsType) {
 
   const choiceFields = detectChoiceFields();
 
-  return [...fields, ...choiceFields];
+  return dedupeScreeningFields([...fields, ...choiceFields]);
 }
 
 function detectLeverScreeningFields() {
@@ -1071,9 +1134,15 @@ function detectLeverScreeningFields() {
     let options = [];
 
     if (input.tagName.toLowerCase() === "select") {
-      options = Array.from(input.options)
-        .map((option) => option.textContent.trim())
-        .filter(Boolean);
+      options = Array.from(el.options)
+        .map((option, optionIndex) =>
+          makeOptionObject(
+            option.textContent.trim(),
+            option.value,
+            optionIndex,
+          ),
+        )
+        .filter((option) => option.label);
     }
 
     fields.push({
@@ -1130,9 +1199,15 @@ function detectAshbyScreeningFields() {
     let options = [];
 
     if (input.tagName.toLowerCase() === "select") {
-      options = Array.from(input.options)
-        .map((option) => option.textContent.trim())
-        .filter(Boolean);
+      options = Array.from(el.options)
+        .map((option, optionIndex) =>
+          makeOptionObject(
+            option.textContent.trim(),
+            option.value,
+            optionIndex,
+          ),
+        )
+        .filter((option) => option.label);
     }
 
     fields.push({
@@ -1150,13 +1225,17 @@ function detectAshbyScreeningFields() {
 function detectChoiceFields() {
   const fields = [];
 
+  // Radio groups
   const radioGroups = {};
   const radioInputs = Array.from(
     document.querySelectorAll('input[type="radio"]'),
   );
 
   radioInputs.forEach((input, index) => {
-    const name = input.name || `radio-group-${index}`;
+    const name =
+      input.name ||
+      input.getAttribute("aria-labelledby") ||
+      `radio-group-${index}`;
 
     if (!radioGroups[name]) {
       radioGroups[name] = [];
@@ -1168,7 +1247,7 @@ function detectChoiceFields() {
   Object.entries(radioGroups).forEach(([groupName, inputs], index) => {
     const firstInput = inputs[0];
     const container =
-      firstInput.closest("fieldset, div, section, li") ||
+      firstInput.closest("fieldset, div, section, li, form") ||
       firstInput.parentElement;
 
     const labelText = container
@@ -1183,12 +1262,15 @@ function detectChoiceFields() {
       input.setAttribute("data-autobidder-field-id", fieldId);
     });
 
-    const options = inputs.map((input) => {
-      const optionLabel = findLabelText(input) || input.value || "";
-      return {
-        value: input.value,
-        label: optionLabel.replace(/\s+/g, " ").trim(),
-      };
+    const options = inputs.map((input, optionIndex) => {
+      const optionLabel =
+        findLabelText(input) || input.value || `Option ${optionIndex + 1}`;
+
+      return makeOptionObject(
+        optionLabel,
+        input.value || optionLabel,
+        optionIndex,
+      );
     });
 
     fields.push({
@@ -1200,6 +1282,7 @@ function detectChoiceFields() {
     });
   });
 
+  // Checkboxes
   const checkboxes = Array.from(
     document.querySelectorAll('input[type="checkbox"]'),
   );
@@ -1207,7 +1290,7 @@ function detectChoiceFields() {
   checkboxes.forEach((input, index) => {
     const labelText =
       findLabelText(input) ||
-      input.closest("label, div, section")?.innerText ||
+      input.closest("label, div, section, li")?.innerText ||
       "";
 
     if (!labelText || labelText.length < 5) return;
@@ -1220,7 +1303,10 @@ function detectChoiceFields() {
       fieldType: "checkbox",
       inputType: "checkbox",
       label: labelText.replace(/\s+/g, " ").trim(),
-      options: ["Checked", "Unchecked"],
+      options: [
+        makeOptionObject("Checked", "checked", 0),
+        makeOptionObject("Unchecked", "unchecked", 1),
+      ],
     });
   });
 
@@ -1271,9 +1357,15 @@ function detectGreenhouseScreeningFields() {
     let options = [];
 
     if (input.tagName.toLowerCase() === "select") {
-      options = Array.from(input.options)
-        .map((option) => option.textContent.trim())
-        .filter(Boolean);
+      options = Array.from(el.options)
+        .map((option, optionIndex) =>
+          makeOptionObject(
+            option.textContent.trim(),
+            option.value,
+            optionIndex,
+          ),
+        )
+        .filter((option) => option.label);
     }
 
     fields.push({
@@ -1384,7 +1476,24 @@ async function runAutobidderAutofillFromPanel() {
 
       screeningMessage = `Screening answers filled: ${fillResult.filled.length}, skipped: ${fillResult.skipped.length}`;
 
-      addPanelLog(screeningMessage, "success");
+      fillResult.filled.forEach((item) => {
+        addPanelLog(
+          `Selected/Filled: ${item.question} → ${item.value}`,
+          "success",
+        );
+      });
+
+      fillResult.skipped.forEach((item) => {
+        addPanelLog(
+          `Needs review: ${item.question} - ${item.reason}`,
+          "warning",
+        );
+      });
+
+      addPanelLog(
+        screeningMessage,
+        fillResult.skipped.length > 0 ? "warning" : "success",
+      );
 
       if (fillResult.skipped.length > 0) {
         addPanelLog(
@@ -1869,14 +1978,18 @@ async function autoDetectAndShowAutobidderPanel() {
       autobidderDetectedJobPage = detection;
       createAutobidderFloatingPanel();
 
+      const atsType = getAtsType();
       const jobInfoBox = document.getElementById("autobidder-job-info");
 
       jobInfoBox.innerHTML = `
-        <strong>Job Posting Detected</strong><br>
-        Company: ${detection.company_name || "Unknown"}<br>
-        Title: ${detection.job_title || "Unknown"}<br>
-        Confidence: ${detection.confidence}
-      `;
+    <strong>Job Posting Detected</strong><br>
+    Company: ${detection.company_name || "Unknown"}<br>
+    Title: ${detection.job_title || "Unknown"}<br>
+    ATS: ${atsType}<br>
+    Confidence: ${detection.confidence}
+  `;
+
+      await maybeStartAutoAnalysis();
     }
   } catch (error) {
     console.warn("Autobidder auto-detection skipped:", error);
@@ -1926,6 +2039,16 @@ function getInputByPossibleNames(possibleNames) {
 
     return possibleNames.some((key) => combined.includes(key));
   });
+}
+
+function makeOptionObject(label, value, index) {
+  return {
+    label: String(label || "")
+      .replace(/\s+/g, " ")
+      .trim(),
+    value: String(value || "").trim(),
+    index,
+  };
 }
 
 function fillLeverBasicFields(profile) {
@@ -2210,4 +2333,122 @@ async function getJson(pathOrUrl) {
   }
 
   return response.data;
+}
+
+function normalizeOptionText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function clickMatchingRadioOption(answer) {
+  const radios = Array.from(
+    document.querySelectorAll(
+      `input[type="radio"][data-autobidder-field-id="${answer.fieldId}"]`,
+    ),
+  );
+
+  if (!radios.length) {
+    return false;
+  }
+
+  const targetValue = normalizeOptionText(answer.selected_option_value);
+  const targetLabel = normalizeOptionText(answer.selected_option_label);
+  const targetAnswer = normalizeOptionText(answer.answer);
+
+  for (const radio of radios) {
+    const label = normalizeOptionText(findLabelText(radio));
+    const value = normalizeOptionText(radio.value);
+
+    const isMatch =
+      (targetValue && value === targetValue) ||
+      (targetLabel && label === targetLabel) ||
+      (targetLabel && label.includes(targetLabel)) ||
+      (targetAnswer && label === targetAnswer) ||
+      (targetAnswer && value === targetAnswer);
+
+    if (isMatch) {
+      radio.click();
+      radio.dispatchEvent(new Event("input", { bubbles: true }));
+      radio.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function setMatchingSelectOption(field, answer) {
+  const options = Array.from(field.options);
+
+  const targetValue = normalizeOptionText(answer.selected_option_value);
+  const targetLabel = normalizeOptionText(answer.selected_option_label);
+  const targetAnswer = normalizeOptionText(answer.answer);
+
+  let matchingOption = null;
+
+  if (targetValue) {
+    matchingOption = options.find(
+      (option) => normalizeOptionText(option.value) === targetValue,
+    );
+  }
+
+  if (!matchingOption && targetLabel) {
+    matchingOption = options.find(
+      (option) => normalizeOptionText(option.textContent) === targetLabel,
+    );
+  }
+
+  if (!matchingOption && targetAnswer) {
+    matchingOption = options.find(
+      (option) =>
+        normalizeOptionText(option.textContent) === targetAnswer ||
+        normalizeOptionText(option.value) === targetAnswer,
+    );
+  }
+
+  if (!matchingOption && typeof answer.selected_option_index === "number") {
+    matchingOption = options[answer.selected_option_index];
+  }
+
+  if (!matchingOption) {
+    return false;
+  }
+
+  field.value = matchingOption.value;
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+  field.dispatchEvent(new Event("change", { bubbles: true }));
+
+  return true;
+}
+
+function setMatchingCheckboxOption(answer) {
+  const checkbox = document.querySelector(
+    `input[type="checkbox"][data-autobidder-field-id="${answer.fieldId}"]`,
+  );
+
+  if (!checkbox) {
+    return false;
+  }
+
+  const targetValue = normalizeOptionText(answer.selected_option_value);
+  const targetLabel = normalizeOptionText(answer.selected_option_label);
+  const targetAnswer = normalizeOptionText(answer.answer);
+
+  const shouldCheck =
+    targetValue === "checked" ||
+    targetValue === "true" ||
+    targetLabel === "checked" ||
+    targetAnswer.includes("yes") ||
+    targetAnswer.includes("agree") ||
+    targetAnswer.includes("consent") ||
+    targetAnswer.includes("checked") ||
+    targetAnswer === "true";
+
+  checkbox.checked = shouldCheck;
+  checkbox.dispatchEvent(new Event("input", { bubbles: true }));
+  checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+
+  return true;
 }

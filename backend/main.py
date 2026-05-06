@@ -1095,6 +1095,56 @@ def find_saved_answer_for_question(saved_answers: list[CandidateAnswer], questio
 
     return None
 
+def normalize_answer_text(value: str) -> str:
+    return " ".join((value or "").lower().strip().split())
+
+
+def pick_option_from_answer(field, answer_text: str):
+    options = field.options or []
+
+    if not options:
+        return None
+
+    answer_norm = normalize_answer_text(answer_text)
+
+    # Exact match first
+    for option in options:
+        label_norm = normalize_answer_text(option.label)
+        value_norm = normalize_answer_text(option.value or "")
+
+        if answer_norm and (answer_norm == label_norm or answer_norm == value_norm):
+            return option
+
+    # Yes/no shortcut
+    if answer_norm.startswith("yes"):
+      for option in options:
+          label_norm = normalize_answer_text(option.label)
+          value_norm = normalize_answer_text(option.value or "")
+
+          if "yes" in label_norm or value_norm == "yes" or value_norm == "true":
+              return option
+
+    if answer_norm.startswith("no"):
+      for option in options:
+          label_norm = normalize_answer_text(option.label)
+          value_norm = normalize_answer_text(option.value or "")
+
+          if "no" in label_norm or value_norm == "no" or value_norm == "false":
+              return option
+
+    # Contains match
+    for option in options:
+        label_norm = normalize_answer_text(option.label)
+        value_norm = normalize_answer_text(option.value or "")
+
+        if label_norm and label_norm in answer_norm:
+            return option
+
+        if value_norm and value_norm in answer_norm:
+            return option
+
+    return None
+
 @app.post("/screening/autofill-answers", response_model=ScreeningAutofillResponse)
 def generate_screening_autofill_answers(
     req: ScreeningAutofillRequest,
@@ -1142,25 +1192,40 @@ def generate_screening_autofill_answers(
         saved_answer = find_saved_answer_for_question(saved_answers, field.label)
 
         if saved_answer:
+            selected_option = pick_option_from_answer(field, saved_answer.answer)
+
             answers.append({
                 "fieldId": field.fieldId,
                 "fieldType": field.fieldType,
                 "question": field.label,
                 "answer": saved_answer.answer,
+                "selected_option_label": selected_option.label if selected_option else None,
+                "selected_option_value": selected_option.value if selected_option else None,
+                "selected_option_index": selected_option.index if selected_option else None,
                 "confidence": "High",
-                "manual_review_required": False
+                "manual_review_required": False if field.fieldType not in ["radio", "select", "checkbox"] or selected_option else True,
+                "reason": "Matched from saved candidate answer library."
             })
             continue
 
         answer_item = parsed_answers[index] if index < len(parsed_answers) else {}
 
+        answer_text = answer_item.get("answer", "")
+        selected_option = pick_option_from_answer(field, answer_text)
+
+        is_choice_field = field.fieldType in ["radio", "select", "checkbox"]
+
         answers.append({
             "fieldId": field.fieldId,
             "fieldType": field.fieldType,
             "question": field.label,
-            "answer": answer_item.get("answer", ""),
+            "answer": answer_text,
+            "selected_option_label": selected_option.label if selected_option else answer_item.get("selected_option_label"),
+            "selected_option_value": selected_option.value if selected_option else answer_item.get("selected_option_value"),
+            "selected_option_index": selected_option.index if selected_option else answer_item.get("selected_option_index"),
             "confidence": answer_item.get("confidence", "Low"),
-            "manual_review_required": answer_item.get("manual_review_required", True)
+            "manual_review_required": True if is_choice_field and not selected_option else answer_item.get("manual_review_required", True),
+            "reason": answer_item.get("reason", "")
         })
 
     return {

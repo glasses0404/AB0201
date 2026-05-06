@@ -139,12 +139,17 @@ class JobPageDetectResponse(BaseModel):
     job_title: Optional[str] = None
     reason: Optional[str] = None
 
+class ScreeningFieldOption(BaseModel):
+    label: str
+    value: Optional[str] = None
+    index: Optional[int] = None
+
 class ScreeningField(BaseModel):
     fieldId: str
     fieldType: str
     inputType: Optional[str] = None
     label: str
-    options: Optional[List[str]] = []
+    options: Optional[List[ScreeningFieldOption]] = []
 
 
 class ScreeningAutofillRequest(BaseModel):
@@ -157,8 +162,12 @@ class ScreeningAutofillAnswer(BaseModel):
     fieldType: Optional[str] = None
     question: str
     answer: str
+    selected_option_label: Optional[str] = None
+    selected_option_value: Optional[str] = None
+    selected_option_index: Optional[int] = None
     confidence: str
     manual_review_required: bool
+    reason: Optional[str] = None
 
 
 class ScreeningAutofillResponse(BaseModel):
