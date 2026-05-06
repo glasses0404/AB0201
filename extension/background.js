@@ -1,7 +1,7 @@
 const API_BASE_URL = "http://127.0.0.1:8000";
 
-async function postJsonToBackend(path, payload) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+async function postJsonToBackend(path, payload, apiBaseUrl = API_BASE_URL) {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -17,8 +17,34 @@ async function postJsonToBackend(path, payload) {
   return await response.json();
 }
 
-async function patchJsonToBackend(path, payload) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+async function getJsonFromBackend(path, apiBaseUrl = API_BASE_URL) {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    method: "GET",
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
+
+  return await response.json();
+}
+
+async function deleteJsonFromBackend(path, apiBaseUrl = API_BASE_URL) {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
+
+  return await response.json();
+}
+
+async function patchJsonToBackend(path, payload, apiBaseUrl = API_BASE_URL) {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -34,22 +60,13 @@ async function patchJsonToBackend(path, payload) {
   return await response.json();
 }
 
-async function getJsonFromBackend(path) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: "GET",
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText);
-  }
-
-  return await response.json();
-}
-
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === "BACKEND_POST_JSON") {
-    postJsonToBackend(request.path, request.payload)
+    postJsonToBackend(
+      request.path,
+      request.payload,
+      request.apiBaseUrl || API_BASE_URL,
+    )
       .then((data) => {
         sendResponse({
           success: true,
@@ -67,7 +84,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.type === "BACKEND_GET_JSON") {
-    getJsonFromBackend(request.path)
+    getJsonFromBackend(request.path, request.apiBaseUrl || API_BASE_URL)
       .then((data) => {
         sendResponse({
           success: true,
@@ -85,7 +102,29 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.type === "BACKEND_PATCH_JSON") {
-    patchJsonToBackend(request.path, request.payload)
+    patchJsonToBackend(
+      request.path,
+      request.payload,
+      request.apiBaseUrl || API_BASE_URL,
+    )
+      .then((data) => {
+        sendResponse({
+          success: true,
+          data,
+        });
+      })
+      .catch((error) => {
+        sendResponse({
+          success: false,
+          message: error.message,
+        });
+      });
+
+    return true;
+  }
+
+  if (request.type === "BACKEND_DELETE_JSON") {
+    deleteJsonFromBackend(request.path, request.apiBaseUrl || API_BASE_URL)
       .then((data) => {
         sendResponse({
           success: true,

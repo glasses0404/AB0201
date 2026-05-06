@@ -8,6 +8,8 @@ let autobidderPanelMode = "work"; // work | settings
 let autobidderActiveWorkTab = "autofill";
 let autobidderActiveSettingsTab = "candidate";
 let autobidderCandidatesCache = [];
+let autobidderEditingAnswerId = null;
+let autobidderCandidateAnswersCache = [];
 
 function createAutobidderFloatingPanel() {
   if (document.getElementById("autobidder-floating-panel")) {
@@ -147,22 +149,146 @@ function createAutobidderFloatingPanel() {
 
           <div id="autobidder-settings-answers" class="autobidder-tab-panel">
             <div class="autobidder-section-title">Saved Answers</div>
+
             <div class="autobidder-card">
-              Candidate answer library will move here.
+              <div id="autobidder-answers-active-candidate">
+                Select an active candidate first.
+              </div>
+
+              <label class="autobidder-label">Question Key</label>
+              <select id="autobidder-answer-question-key" class="autobidder-input">
+                <option value="work_authorization">Work Authorization</option>
+                <option value="sponsorship">Sponsorship</option>
+                <option value="salary_expectation">Salary Expectation</option>
+                <option value="remote_preference">Remote / Hybrid Preference</option>
+                <option value="relocation">Relocation</option>
+                <option value="notice_period">Notice Period / Start Date</option>
+                <option value="travel">Travel</option>
+                <option value="security_clearance">Security Clearance</option>
+                <option value="timezone">Timezone</option>
+                <option value="custom">Custom</option>
+              </select>
+
+              <label class="autobidder-label">Question Label</label>
+              <input
+                id="autobidder-answer-question-label"
+                class="autobidder-input"
+                type="text"
+                placeholder="Example: Are you legally authorized to work in the United States?"
+              />
+
+              <label class="autobidder-label">Saved Answer</label>
+              <textarea
+                id="autobidder-answer-text"
+                class="autobidder-input autobidder-textarea"
+                placeholder="Example: Yes"
+              ></textarea>
+
+              <label class="autobidder-label">Answer Type</label>
+              <select id="autobidder-answer-type" class="autobidder-input">
+                <option value="short">Short</option>
+                <option value="sentence">Sentence</option>
+                <option value="paragraph">Paragraph</option>
+              </select>
+
+              <div class="autobidder-button-row">
+                <button id="autobidder-save-answer-btn">Save Answer</button>
+                <button id="autobidder-clear-answer-form-btn" class="autobidder-secondary-btn">Clear</button>
+              </div>
+
+              <div id="autobidder-answer-form-status" class="autobidder-mini-preview">
+                Ready.
+              </div>
+            </div>
+
+            <div class="autobidder-card">
+              <div class="autobidder-section-title">Saved Answers List</div>
+              <button id="autobidder-load-answers-btn">Refresh Answers</button>
+              <div id="autobidder-saved-answers-list" class="autobidder-answer-list">
+                No answers loaded.
+              </div>
             </div>
           </div>
 
           <div id="autobidder-settings-integrations" class="autobidder-tab-panel">
             <div class="autobidder-section-title">Integrations</div>
+
             <div class="autobidder-card">
-              Backend URL, Google Sheet link, health check, and sync settings will move here.
+              <label class="autobidder-label">Backend API URL</label>
+              <input
+                id="autobidder-settings-api-url"
+                class="autobidder-input"
+                type="text"
+                placeholder="http://127.0.0.1:8000"
+              />
+
+              <label class="autobidder-label">Google Sheet URL</label>
+              <input
+                id="autobidder-settings-google-sheet-url"
+                class="autobidder-input"
+                type="text"
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+              />
+
+              <div class="autobidder-button-row">
+                <button id="autobidder-save-integrations-btn">Save Settings</button>
+                <button id="autobidder-check-backend-btn" class="autobidder-secondary-btn">Check Backend</button>
+              </div>
+
+              <div class="autobidder-button-row">
+                <button id="autobidder-open-google-sheet-btn">Open Sheet</button>
+                <button id="autobidder-sync-dashboard-btn" class="autobidder-secondary-btn">Sync Dashboard</button>
+              </div>
+
+              <button id="autobidder-sync-today-btn">Sync Today Applications</button>
+
+              <div id="autobidder-integrations-status" class="autobidder-mini-preview">
+                Ready.
+              </div>
             </div>
           </div>
 
           <div id="autobidder-settings-preferences" class="autobidder-tab-panel">
             <div class="autobidder-section-title">Preferences</div>
+
             <div class="autobidder-card">
-              Auto-show panel, auto-analyze, auto-upload resume, and auto-sync preferences will move here.
+              <label class="autobidder-checkbox-row">
+                <input id="autobidder-pref-auto-show-panel" type="checkbox" />
+                <span>
+                  <strong>Auto-show panel on job pages</strong><br>
+                  <small>Show Autobidder automatically when a job posting page is detected.</small>
+                </span>
+              </label>
+
+              <label class="autobidder-checkbox-row">
+                <input id="autobidder-pref-auto-analyze" type="checkbox" />
+                <span>
+                  <strong>Auto-analyze detected job pages</strong><br>
+                  <small>Start match score, cover letter, and screening analysis automatically.</small>
+                </span>
+              </label>
+
+              <label class="autobidder-checkbox-row">
+                <input id="autobidder-pref-auto-upload-resume" type="checkbox" />
+                <span>
+                  <strong>Upload resume during autofill</strong><br>
+                  <small>Upload the saved resume file when Autofill is clicked.</small>
+                </span>
+              </label>
+
+              <label class="autobidder-checkbox-row">
+                <input id="autobidder-pref-auto-sync-submitted" type="checkbox" />
+                <span>
+                  <strong>Sync after marking submitted</strong><br>
+                  <small>Update Google Sheets Applications and Dashboard after submission.</small>
+                </span>
+              </label>
+
+              <button id="autobidder-save-preferences-btn">Save Preferences</button>
+
+              <div id="autobidder-preferences-status" class="autobidder-mini-preview">
+                Ready.
+              </div>
             </div>
           </div>
         </div>
@@ -268,6 +394,80 @@ function createAutobidderFloatingPanel() {
 
     #autobidder-report-btn {
       min-width: 58px;
+    }
+
+    .autobidder-textarea {
+      min-height: 72px;
+      resize: vertical;
+      font-family: Arial, sans-serif;
+    }
+
+    .autobidder-button-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .autobidder-secondary-btn {
+      background: #374151 !important;
+    }
+
+    .autobidder-answer-list {
+      margin-top: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .autobidder-answer-item {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 9px;
+      padding: 9px;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .autobidder-answer-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .autobidder-answer-actions button {
+      padding: 7px !important;
+      font-size: 12px !important;
+    }
+
+    .autobidder-delete-btn {
+      background: #dc2626 !important;
+    }
+
+    .autobidder-edit-btn {
+      background: #2563eb !important;
+    }
+
+    .autobidder-checkbox-row {
+      display: grid;
+      grid-template-columns: 22px 1fr;
+      gap: 8px;
+      align-items: flex-start;
+      padding: 9px;
+      border: 1px solid #e5e7eb;
+      background: #ffffff;
+      border-radius: 9px;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+
+    .autobidder-checkbox-row input {
+      margin-top: 3px;
+    }
+
+    .autobidder-checkbox-row small {
+      color: #6b7280;
+      line-height: 1.35;
     }
 
     #autobidder-settings-btn {
@@ -835,6 +1035,21 @@ function bindAutobidderPanelEvents() {
         bindResumeSettingsEvents();
         await renderResumeSettings();
       }
+
+      if (button.dataset.settingsTab === "answers") {
+        bindSavedAnswersSettingsEvents();
+        await loadSavedAnswersSettings();
+      }
+
+      if (button.dataset.settingsTab === "integrations") {
+        bindIntegrationSettingsEvents();
+        await loadIntegrationSettings();
+      }
+
+      if (button.dataset.settingsTab === "preferences") {
+        bindPreferencesSettingsEvents();
+        await loadPreferencesSettings();
+      }
     });
   });
 
@@ -872,25 +1087,6 @@ function bindAutobidderPanelEvents() {
       setActiveWorkTab("autofill");
       await runAutobidderMarkSubmittedAndSync();
     });
-  }
-}
-
-async function openAutobidderReport() {
-  try {
-    const result = await new Promise((resolve) => {
-      chrome.storage.local.get(["googleSheetUrl"], resolve);
-    });
-
-    if (result.googleSheetUrl) {
-      window.open(result.googleSheetUrl, "_blank");
-      return;
-    }
-
-    alert(
-      "Google Sheet URL is not configured yet. Go to Settings → Integrations.",
-    );
-  } catch (error) {
-    alert("Could not open report: " + error.message);
   }
 }
 
@@ -1110,7 +1306,7 @@ function detectScreeningFields() {
     let options = [];
 
     if (el.tagName.toLowerCase() === "select") {
-      options = Array.from(el.options)
+      options = Array.from(input.options)
         .map((option) => option.textContent.trim())
         .filter(Boolean);
     }
@@ -1338,6 +1534,19 @@ async function maybeStartAutoAnalysis() {
     return;
   }
 
+  const preferences = await getAutobidderPreferences();
+
+  if (!preferences.autoAnalyze) {
+    const resultBox = document.getElementById("autobidder-result-box");
+
+    if (resultBox) {
+      resultBox.innerText =
+        "Auto-analysis is disabled. Click Analyze Job to start.";
+    }
+
+    return;
+  }
+
   const hasActiveCandidate = await hasActiveCandidateAndBidder();
 
   if (!hasActiveCandidate) {
@@ -1345,7 +1554,7 @@ async function maybeStartAutoAnalysis() {
 
     if (resultBox) {
       resultBox.innerText =
-        "Select an active candidate in the extension popup first. Then refresh this job page.";
+        "Select an active candidate in Settings → Candidate first. Then refresh this job page or click Analyze Job.";
     }
 
     return;
@@ -1460,7 +1669,13 @@ function uploadResumeFileToPage(resumeData) {
 }
 
 async function postJson(pathOrUrl, payload) {
+  const apiBaseUrl = await getConfiguredApiBaseUrl();
+
   let path = pathOrUrl;
+
+  if (pathOrUrl.startsWith(apiBaseUrl)) {
+    path = pathOrUrl.replace(apiBaseUrl, "");
+  }
 
   if (pathOrUrl.startsWith(AUTOBIDDER_API_BASE_URL)) {
     path = pathOrUrl.replace(AUTOBIDDER_API_BASE_URL, "");
@@ -1468,6 +1683,7 @@ async function postJson(pathOrUrl, payload) {
 
   const response = await chrome.runtime.sendMessage({
     type: "BACKEND_POST_JSON",
+    apiBaseUrl,
     path,
     payload,
   });
@@ -1834,7 +2050,7 @@ function detectLeverScreeningFields() {
     let options = [];
 
     if (input.tagName.toLowerCase() === "select") {
-      options = Array.from(el.options)
+      options = Array.from(input.options)
         .map((option, optionIndex) =>
           makeOptionObject(
             option.textContent.trim(),
@@ -1899,7 +2115,7 @@ function detectAshbyScreeningFields() {
     let options = [];
 
     if (input.tagName.toLowerCase() === "select") {
-      options = Array.from(el.options)
+      options = Array.from(input.options)
         .map((option, optionIndex) =>
           makeOptionObject(
             option.textContent.trim(),
@@ -2057,7 +2273,7 @@ function detectGreenhouseScreeningFields() {
     let options = [];
 
     if (input.tagName.toLowerCase() === "select") {
-      options = Array.from(el.options)
+      options = Array.from(input.options)
         .map((option, optionIndex) =>
           makeOptionObject(
             option.textContent.trim(),
@@ -2138,26 +2354,34 @@ async function runAutobidderAutofillFromPanel() {
 
     addPanelLog(basicFillMessage, "success");
 
-    setPanelStep("Uploading resume...");
+    const preferences = await getAutobidderPreferences();
 
-    let resumeMessage = "No saved resume found for this candidate.";
+    let resumeMessage = "Resume upload skipped by preference.";
 
-    const resumeData = await getSavedResumeFileForCandidateFromStorage(
-      active.candidateId,
-    );
+    if (preferences.autoUploadResume) {
+      setPanelStep("Uploading resume...");
 
-    if (resumeData) {
-      const resumeResult = uploadResumeFileToPage(resumeData);
+      resumeMessage = "No saved resume found for this candidate.";
 
-      if (resumeResult.success) {
-        addPanelLog(resumeResult.message, "success");
+      const resumeData = await getSavedResumeFileForCandidateFromStorage(
+        active.candidateId,
+      );
+
+      if (resumeData) {
+        const resumeResult = uploadResumeFileToPage(resumeData);
+
+        if (resumeResult.success) {
+          addPanelLog(resumeResult.message, "success");
+        } else {
+          addPanelLog(resumeResult.message, "warning");
+        }
+
+        resumeMessage = resumeResult.message;
       } else {
-        addPanelLog(resumeResult.message, "warning");
+        addPanelLog(resumeMessage, "warning");
       }
-
-      resumeMessage = resumeResult.message;
     } else {
-      addPanelLog(resumeMessage, "warning");
+      addPanelLog("Resume upload skipped by preference.", "warning");
     }
 
     setPanelStep("Filling screening answers...");
@@ -2638,6 +2862,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 async function autoDetectAndShowAutobidderPanel() {
   try {
+    const preferences = await getAutobidderPreferences();
+
+    if (!preferences.autoShowPanel) {
+      return;
+    }
+
     const pageText = getVisiblePageText();
 
     if (!pageText || pageText.length < 300) {
@@ -2985,25 +3215,31 @@ async function runAutobidderMarkSubmittedAndSync() {
 
     addPanelLog("Application marked as submitted", "success");
 
-    setPanelStep("Syncing application history to Google Sheets...");
+    const preferences = await getAutobidderPreferences();
 
-    await postJson(
-      `${AUTOBIDDER_API_BASE_URL}/sync/google-sheets/applications?today_only=true&triggered_by=On-page%20Panel`,
-      {},
-    );
+    if (preferences.autoSyncSubmitted) {
+      setPanelStep("Syncing application history to Google Sheets...");
 
-    addPanelLog("Applications sheet synced", "success");
+      await postJson(
+        `${AUTOBIDDER_API_BASE_URL}/sync/google-sheets/applications?today_only=true&triggered_by=On-page%20Panel`,
+        {},
+      );
 
-    setPanelStep("Updating dashboard...");
+      addPanelLog("Applications sheet synced", "success");
 
-    const today = new Date().toISOString().slice(0, 10);
+      setPanelStep("Updating dashboard...");
 
-    await postJson(
-      `${AUTOBIDDER_API_BASE_URL}/sync/google-sheets/dashboard?report_date=${today}`,
-      {},
-    );
+      const today = new Date().toISOString().slice(0, 10);
 
-    addPanelLog("Dashboard synced", "success");
+      await postJson(
+        `${AUTOBIDDER_API_BASE_URL}/sync/google-sheets/dashboard?report_date=${today}`,
+        {},
+      );
+
+      addPanelLog("Dashboard synced", "success");
+    } else {
+      addPanelLog("Google Sheets sync skipped by preference.", "warning");
+    }
 
     chrome.storage.local.set({
       latestOnPageApplicationDraft: updatedApplication,
@@ -3026,7 +3262,13 @@ Submitted At: ${updatedApplication.submitted_at || "-"}
 }
 
 async function getJson(pathOrUrl) {
+  const apiBaseUrl = await getConfiguredApiBaseUrl();
+
   let path = pathOrUrl;
+
+  if (pathOrUrl.startsWith(apiBaseUrl)) {
+    path = pathOrUrl.replace(apiBaseUrl, "");
+  }
 
   if (pathOrUrl.startsWith(AUTOBIDDER_API_BASE_URL)) {
     path = pathOrUrl.replace(AUTOBIDDER_API_BASE_URL, "");
@@ -3034,6 +3276,7 @@ async function getJson(pathOrUrl) {
 
   const response = await chrome.runtime.sendMessage({
     type: "BACKEND_GET_JSON",
+    apiBaseUrl,
     path,
   });
 
@@ -3045,7 +3288,13 @@ async function getJson(pathOrUrl) {
 }
 
 async function patchJson(pathOrUrl, payload) {
+  const apiBaseUrl = await getConfiguredApiBaseUrl();
+
   let path = pathOrUrl;
+
+  if (pathOrUrl.startsWith(apiBaseUrl)) {
+    path = pathOrUrl.replace(apiBaseUrl, "");
+  }
 
   if (pathOrUrl.startsWith(AUTOBIDDER_API_BASE_URL)) {
     path = pathOrUrl.replace(AUTOBIDDER_API_BASE_URL, "");
@@ -3053,6 +3302,7 @@ async function patchJson(pathOrUrl, payload) {
 
   const response = await chrome.runtime.sendMessage({
     type: "BACKEND_PATCH_JSON",
+    apiBaseUrl,
     path,
     payload,
   });
@@ -3533,6 +3783,7 @@ function bindCandidateSettingsEvents() {
     autobidderAutoAnalysisStarted = false;
 
     await renderResumeSettings();
+    await loadSavedAnswersSettings();
   });
 }
 
@@ -3726,4 +3977,652 @@ function bindResumeSettingsEvents() {
       }
     }
   });
+}
+
+async function deleteJson(pathOrUrl) {
+  const apiBaseUrl = await getConfiguredApiBaseUrl();
+
+  let path = pathOrUrl;
+
+  if (pathOrUrl.startsWith(apiBaseUrl)) {
+    path = pathOrUrl.replace(apiBaseUrl, "");
+  }
+
+  if (pathOrUrl.startsWith(AUTOBIDDER_API_BASE_URL)) {
+    path = pathOrUrl.replace(AUTOBIDDER_API_BASE_URL, "");
+  }
+
+  const response = await chrome.runtime.sendMessage({
+    type: "BACKEND_DELETE_JSON",
+    apiBaseUrl,
+    path,
+  });
+
+  if (!response || !response.success) {
+    throw new Error(response?.message || "Backend DELETE request failed.");
+  }
+
+  return response.data;
+}
+async function getActiveCandidateForAnswers() {
+  const active = await getActiveCandidateFromStorage();
+
+  if (!active || !active.candidateId) {
+    return null;
+  }
+
+  return active;
+}
+
+async function createCandidateAnswerFromPanel(candidateId, payload) {
+  return await postJson(
+    `${AUTOBIDDER_API_BASE_URL}/candidates/${candidateId}/answers`,
+    payload,
+  );
+}
+
+async function updateCandidateAnswerFromPanel(answerId, payload) {
+  return await patchJson(
+    `${AUTOBIDDER_API_BASE_URL}/candidate-answers/${answerId}`,
+    payload,
+  );
+}
+
+async function deleteCandidateAnswerFromPanel(answerId) {
+  return await deleteJson(
+    `${AUTOBIDDER_API_BASE_URL}/candidate-answers/${answerId}`,
+  );
+}
+
+async function getCandidateAnswersFromPanel(candidateId) {
+  return await getJson(
+    `${AUTOBIDDER_API_BASE_URL}/candidates/${candidateId}/answers`,
+  );
+}
+
+function setAnswerFormStatus(message, type = "info") {
+  const statusBox = document.getElementById("autobidder-answer-form-status");
+
+  if (!statusBox) return;
+
+  const colorMap = {
+    info: "#374151",
+    success: "#166534",
+    error: "#991b1b",
+    warning: "#92400e",
+  };
+
+  statusBox.innerHTML = `<span style="color:${colorMap[type] || "#374151"};">${message}</span>`;
+}
+
+function clearAnswerForm() {
+  const keyInput = document.getElementById("autobidder-answer-question-key");
+  const labelInput = document.getElementById(
+    "autobidder-answer-question-label",
+  );
+  const answerInput = document.getElementById("autobidder-answer-text");
+  const typeInput = document.getElementById("autobidder-answer-type");
+  const saveBtn = document.getElementById("autobidder-save-answer-btn");
+
+  if (keyInput) keyInput.value = "work_authorization";
+  if (labelInput) labelInput.value = "";
+  if (answerInput) answerInput.value = "";
+  if (typeInput) typeInput.value = "short";
+
+  autobidderEditingAnswerId = null;
+
+  if (saveBtn) {
+    saveBtn.innerText = "Save Answer";
+  }
+
+  setAnswerFormStatus("Ready.", "info");
+}
+
+function fillAnswerForm(answer) {
+  const keyInput = document.getElementById("autobidder-answer-question-key");
+  const labelInput = document.getElementById(
+    "autobidder-answer-question-label",
+  );
+  const answerInput = document.getElementById("autobidder-answer-text");
+  const typeInput = document.getElementById("autobidder-answer-type");
+  const saveBtn = document.getElementById("autobidder-save-answer-btn");
+
+  if (keyInput) keyInput.value = answer.question_key || "custom";
+  if (labelInput) labelInput.value = answer.question_label || "";
+  if (answerInput) answerInput.value = answer.answer || "";
+  if (typeInput) typeInput.value = answer.answer_type || "short";
+
+  autobidderEditingAnswerId = answer.id;
+
+  if (saveBtn) {
+    saveBtn.innerText = `Update Answer #${answer.id}`;
+  }
+
+  setAnswerFormStatus(`Editing answer #${answer.id}.`, "warning");
+}
+
+function renderSavedAnswersList(answers) {
+  const listBox = document.getElementById("autobidder-saved-answers-list");
+
+  if (!listBox) return;
+
+  listBox.innerHTML = "";
+
+  if (!answers || answers.length === 0) {
+    listBox.innerHTML = "No saved answers found for this candidate.";
+    return;
+  }
+
+  answers.forEach((answer) => {
+    const item = document.createElement("div");
+    item.className = "autobidder-answer-item";
+
+    item.innerHTML = `
+      <strong>#${answer.id} - ${answer.question_key}</strong><br>
+      <strong>Question:</strong> ${answer.question_label || "-"}<br>
+      <strong>Answer:</strong> ${answer.answer || "-"}<br>
+      <strong>Type:</strong> ${answer.answer_type || "short"}<br>
+      <strong>Updated:</strong> ${answer.updated_at ? new Date(answer.updated_at).toLocaleString() : "-"}
+
+      <div class="autobidder-answer-actions">
+        <button class="autobidder-edit-btn" data-answer-id="${answer.id}">Edit</button>
+        <button class="autobidder-delete-btn" data-answer-id="${answer.id}">Delete</button>
+      </div>
+    `;
+
+    listBox.appendChild(item);
+  });
+
+  listBox.querySelectorAll(".autobidder-edit-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      const answerId = Number(button.getAttribute("data-answer-id"));
+      const answer = autobidderCandidateAnswersCache.find(
+        (item) => Number(item.id) === answerId,
+      );
+
+      if (answer) {
+        fillAnswerForm(answer);
+      }
+    });
+  });
+
+  listBox.querySelectorAll(".autobidder-delete-btn").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const answerId = Number(button.getAttribute("data-answer-id"));
+
+      const confirmed = confirm(`Delete saved answer #${answerId}?`);
+
+      if (!confirmed) return;
+
+      try {
+        setAnswerFormStatus(`Deleting answer #${answerId}...`, "warning");
+
+        await deleteCandidateAnswerFromPanel(answerId);
+
+        setAnswerFormStatus(`Answer #${answerId} deleted.`, "success");
+
+        await loadSavedAnswersSettings();
+      } catch (error) {
+        setAnswerFormStatus(`Delete error: ${error.message}`, "error");
+      }
+    });
+  });
+}
+
+async function loadSavedAnswersSettings() {
+  const activeCandidateBox = document.getElementById(
+    "autobidder-answers-active-candidate",
+  );
+  const listBox = document.getElementById("autobidder-saved-answers-list");
+
+  if (!activeCandidateBox || !listBox) return;
+
+  try {
+    const active = await getActiveCandidateForAnswers();
+
+    if (!active) {
+      activeCandidateBox.innerHTML = `
+        <strong>No active candidate selected.</strong><br>
+        Go to Settings → Candidate and set an active candidate first.
+      `;
+
+      listBox.innerHTML = "No candidate selected.";
+      return;
+    }
+
+    let candidateName = `Candidate #${active.candidateId}`;
+
+    try {
+      const candidate = await getJson(
+        `${AUTOBIDDER_API_BASE_URL}/candidates/${active.candidateId}`,
+      );
+
+      if (candidate) {
+        candidateName =
+          `${candidate.first_name || ""} ${candidate.last_name || ""}`.trim() ||
+          candidateName;
+      }
+    } catch (error) {
+      // Keep fallback candidate name
+    }
+
+    activeCandidateBox.innerHTML = `
+      <strong>Active Candidate:</strong> ${candidateName}<br>
+      <strong>Candidate ID:</strong> ${active.candidateId}
+    `;
+
+    listBox.innerHTML = "Loading saved answers...";
+
+    const answers = await getCandidateAnswersFromPanel(active.candidateId);
+
+    autobidderCandidateAnswersCache = answers || [];
+
+    renderSavedAnswersList(autobidderCandidateAnswersCache);
+  } catch (error) {
+    listBox.innerHTML = `Saved answers load error: ${error.message}`;
+  }
+}
+
+function bindSavedAnswersSettingsEvents() {
+  const saveBtn = document.getElementById("autobidder-save-answer-btn");
+  const clearBtn = document.getElementById("autobidder-clear-answer-form-btn");
+  const loadBtn = document.getElementById("autobidder-load-answers-btn");
+
+  if (saveBtn && !saveBtn.dataset.bound) {
+    saveBtn.dataset.bound = "true";
+
+    saveBtn.addEventListener("click", async () => {
+      const keyInput = document.getElementById(
+        "autobidder-answer-question-key",
+      );
+      const labelInput = document.getElementById(
+        "autobidder-answer-question-label",
+      );
+      const answerInput = document.getElementById("autobidder-answer-text");
+      const typeInput = document.getElementById("autobidder-answer-type");
+
+      try {
+        const active = await getActiveCandidateForAnswers();
+
+        if (!active) {
+          setAnswerFormStatus("Please set an active candidate first.", "error");
+          return;
+        }
+
+        const payload = {
+          question_key: keyInput ? keyInput.value : "custom",
+          question_label: labelInput ? labelInput.value.trim() : "",
+          answer: answerInput ? answerInput.value.trim() : "",
+          answer_type: typeInput ? typeInput.value : "short",
+        };
+
+        if (!payload.question_label || !payload.answer) {
+          setAnswerFormStatus(
+            "Question label and answer are required.",
+            "error",
+          );
+          return;
+        }
+
+        if (autobidderEditingAnswerId) {
+          setAnswerFormStatus(
+            `Updating answer #${autobidderEditingAnswerId}...`,
+            "warning",
+          );
+
+          await updateCandidateAnswerFromPanel(
+            autobidderEditingAnswerId,
+            payload,
+          );
+
+          setAnswerFormStatus(
+            `Answer #${autobidderEditingAnswerId} updated.`,
+            "success",
+          );
+        } else {
+          setAnswerFormStatus("Saving new answer...", "warning");
+
+          await createCandidateAnswerFromPanel(active.candidateId, payload);
+
+          setAnswerFormStatus("New answer saved.", "success");
+        }
+
+        clearAnswerForm();
+
+        await loadSavedAnswersSettings();
+      } catch (error) {
+        setAnswerFormStatus(`Save answer error: ${error.message}`, "error");
+      }
+    });
+  }
+
+  if (clearBtn && !clearBtn.dataset.bound) {
+    clearBtn.dataset.bound = "true";
+
+    clearBtn.addEventListener("click", () => {
+      clearAnswerForm();
+    });
+  }
+
+  if (loadBtn && !loadBtn.dataset.bound) {
+    loadBtn.dataset.bound = "true";
+
+    loadBtn.addEventListener("click", async () => {
+      await loadSavedAnswersSettings();
+    });
+  }
+}
+
+async function getConfiguredApiBaseUrl() {
+  const result = await new Promise((resolve) => {
+    chrome.storage.local.get(["apiBaseUrl"], resolve);
+  });
+
+  return (
+    result.apiBaseUrl || AUTOBIDDER_API_BASE_URL || "http://127.0.0.1:8000"
+  );
+}
+
+function bindIntegrationSettingsEvents() {
+  const saveBtn = document.getElementById("autobidder-save-integrations-btn");
+  const checkBackendBtn = document.getElementById(
+    "autobidder-check-backend-btn",
+  );
+  const openSheetBtn = document.getElementById(
+    "autobidder-open-google-sheet-btn",
+  );
+  const syncTodayBtn = document.getElementById("autobidder-sync-today-btn");
+  const syncDashboardBtn = document.getElementById(
+    "autobidder-sync-dashboard-btn",
+  );
+
+  if (saveBtn && !saveBtn.dataset.bound) {
+    saveBtn.dataset.bound = "true";
+    saveBtn.addEventListener("click", saveIntegrationSettings);
+  }
+
+  if (checkBackendBtn && !checkBackendBtn.dataset.bound) {
+    checkBackendBtn.dataset.bound = "true";
+    checkBackendBtn.addEventListener("click", checkBackendHealthFromPanel);
+  }
+
+  if (openSheetBtn && !openSheetBtn.dataset.bound) {
+    openSheetBtn.dataset.bound = "true";
+    openSheetBtn.addEventListener("click", openGoogleSheetFromPanel);
+  }
+
+  if (syncTodayBtn && !syncTodayBtn.dataset.bound) {
+    syncTodayBtn.dataset.bound = "true";
+    syncTodayBtn.addEventListener("click", syncTodayApplicationsFromPanel);
+  }
+
+  if (syncDashboardBtn && !syncDashboardBtn.dataset.bound) {
+    syncDashboardBtn.dataset.bound = "true";
+    syncDashboardBtn.addEventListener("click", syncDashboardFromPanel);
+  }
+}
+
+function setIntegrationsStatus(message, type = "info") {
+  const statusBox = document.getElementById("autobidder-integrations-status");
+
+  if (!statusBox) return;
+
+  const colorMap = {
+    info: "#374151",
+    success: "#166534",
+    error: "#991b1b",
+    warning: "#92400e",
+  };
+
+  statusBox.innerHTML = `<span style="color:${colorMap[type] || "#374151"};">${message}</span>`;
+}
+
+async function loadIntegrationSettings() {
+  const apiUrlInput = document.getElementById("autobidder-settings-api-url");
+  const sheetUrlInput = document.getElementById(
+    "autobidder-settings-google-sheet-url",
+  );
+
+  const result = await new Promise((resolve) => {
+    chrome.storage.local.get(["apiBaseUrl", "googleSheetUrl"], resolve);
+  });
+
+  if (apiUrlInput) {
+    apiUrlInput.value =
+      result.apiBaseUrl || AUTOBIDDER_API_BASE_URL || "http://127.0.0.1:8000";
+  }
+
+  if (sheetUrlInput) {
+    sheetUrlInput.value = result.googleSheetUrl || "";
+  }
+
+  setIntegrationsStatus("Integration settings loaded.", "success");
+}
+
+async function saveIntegrationSettings() {
+  const apiUrlInput = document.getElementById("autobidder-settings-api-url");
+  const sheetUrlInput = document.getElementById(
+    "autobidder-settings-google-sheet-url",
+  );
+
+  const apiBaseUrl = apiUrlInput
+    ? apiUrlInput.value.trim().replace(/\/$/, "")
+    : "";
+  const googleSheetUrl = sheetUrlInput ? sheetUrlInput.value.trim() : "";
+
+  if (!apiBaseUrl) {
+    setIntegrationsStatus("Backend API URL is required.", "error");
+    return;
+  }
+
+  await chrome.storage.local.set({
+    apiBaseUrl,
+    googleSheetUrl,
+  });
+
+  setIntegrationsStatus("Integration settings saved.", "success");
+}
+
+async function checkBackendHealthFromPanel() {
+  try {
+    setIntegrationsStatus("Checking backend health...", "warning");
+
+    const result = await getJson("/health");
+
+    setIntegrationsStatus(
+      `Backend is healthy. Status: ${result.status || "ok"}`,
+      "success",
+    );
+  } catch (error) {
+    setIntegrationsStatus(`Backend health error: ${error.message}`, "error");
+  }
+}
+
+async function openGoogleSheetFromPanel() {
+  const result = await new Promise((resolve) => {
+    chrome.storage.local.get(["googleSheetUrl"], resolve);
+  });
+
+  if (!result.googleSheetUrl) {
+    setIntegrationsStatus("Google Sheet URL is not configured.", "error");
+    return;
+  }
+
+  window.open(result.googleSheetUrl, "_blank");
+  setIntegrationsStatus("Google Sheet opened.", "success");
+}
+
+function getTodayDateStringForPanel() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+async function syncTodayApplicationsFromPanel() {
+  try {
+    setIntegrationsStatus("Syncing today's applications...", "warning");
+
+    const result = await postJson(
+      "/sync/google-sheets/applications?today_only=true&triggered_by=Panel%20Settings",
+      {},
+    );
+
+    setIntegrationsStatus(
+      `Today sync complete. New: ${result.rows_synced}, Updated: ${result.rows_updated}, Log ID: ${result.sync_log_id}`,
+      "success",
+    );
+  } catch (error) {
+    setIntegrationsStatus(`Sync today error: ${error.message}`, "error");
+  }
+}
+
+async function syncDashboardFromPanel() {
+  try {
+    setIntegrationsStatus("Syncing dashboard...", "warning");
+
+    const today = getTodayDateStringForPanel();
+
+    const result = await postJson(
+      `/sync/google-sheets/dashboard?report_date=${today}`,
+      {},
+    );
+
+    setIntegrationsStatus(
+      `Dashboard synced. Rows written: ${result.rows_written}`,
+      "success",
+    );
+  } catch (error) {
+    setIntegrationsStatus(`Dashboard sync error: ${error.message}`, "error");
+  }
+}
+
+function getDefaultAutobidderPreferences() {
+  return {
+    autoShowPanel: true,
+    autoAnalyze: true,
+    autoUploadResume: true,
+    autoSyncSubmitted: true,
+  };
+}
+
+async function getAutobidderPreferences() {
+  const result = await new Promise((resolve) => {
+    chrome.storage.local.get(["autobidderPreferences"], resolve);
+  });
+
+  return {
+    ...getDefaultAutobidderPreferences(),
+    ...(result.autobidderPreferences || {}),
+  };
+}
+
+async function saveAutobidderPreferences(preferences) {
+  await chrome.storage.local.set({
+    autobidderPreferences: {
+      ...getDefaultAutobidderPreferences(),
+      ...preferences,
+    },
+  });
+}
+function setPreferencesStatus(message, type = "info") {
+  const statusBox = document.getElementById("autobidder-preferences-status");
+
+  if (!statusBox) return;
+
+  const colorMap = {
+    info: "#374151",
+    success: "#166534",
+    error: "#991b1b",
+    warning: "#92400e",
+  };
+
+  statusBox.innerHTML = `<span style="color:${colorMap[type] || "#374151"};">${message}</span>`;
+}
+
+async function loadPreferencesSettings() {
+  const preferences = await getAutobidderPreferences();
+
+  const autoShowPanelInput = document.getElementById(
+    "autobidder-pref-auto-show-panel",
+  );
+  const autoAnalyzeInput = document.getElementById(
+    "autobidder-pref-auto-analyze",
+  );
+  const autoUploadResumeInput = document.getElementById(
+    "autobidder-pref-auto-upload-resume",
+  );
+  const autoSyncSubmittedInput = document.getElementById(
+    "autobidder-pref-auto-sync-submitted",
+  );
+
+  if (autoShowPanelInput) {
+    autoShowPanelInput.checked = Boolean(preferences.autoShowPanel);
+  }
+
+  if (autoAnalyzeInput) {
+    autoAnalyzeInput.checked = Boolean(preferences.autoAnalyze);
+  }
+
+  if (autoUploadResumeInput) {
+    autoUploadResumeInput.checked = Boolean(preferences.autoUploadResume);
+  }
+
+  if (autoSyncSubmittedInput) {
+    autoSyncSubmittedInput.checked = Boolean(preferences.autoSyncSubmitted);
+  }
+
+  setPreferencesStatus("Preferences loaded.", "success");
+}
+
+async function savePreferencesSettingsFromPanel() {
+  const autoShowPanelInput = document.getElementById(
+    "autobidder-pref-auto-show-panel",
+  );
+  const autoAnalyzeInput = document.getElementById(
+    "autobidder-pref-auto-analyze",
+  );
+  const autoUploadResumeInput = document.getElementById(
+    "autobidder-pref-auto-upload-resume",
+  );
+  const autoSyncSubmittedInput = document.getElementById(
+    "autobidder-pref-auto-sync-submitted",
+  );
+
+  const preferences = {
+    autoShowPanel: autoShowPanelInput ? autoShowPanelInput.checked : true,
+    autoAnalyze: autoAnalyzeInput ? autoAnalyzeInput.checked : true,
+    autoUploadResume: autoUploadResumeInput
+      ? autoUploadResumeInput.checked
+      : true,
+    autoSyncSubmitted: autoSyncSubmittedInput
+      ? autoSyncSubmittedInput.checked
+      : true,
+  };
+
+  await saveAutobidderPreferences(preferences);
+
+  setPreferencesStatus("Preferences saved.", "success");
+}
+
+function bindPreferencesSettingsEvents() {
+  const saveBtn = document.getElementById("autobidder-save-preferences-btn");
+
+  if (saveBtn && !saveBtn.dataset.bound) {
+    saveBtn.dataset.bound = "true";
+
+    saveBtn.addEventListener("click", async () => {
+      try {
+        setPreferencesStatus("Saving preferences...", "warning");
+        await savePreferencesSettingsFromPanel();
+      } catch (error) {
+        setPreferencesStatus(
+          `Save preferences error: ${error.message}`,
+          "error",
+        );
+      }
+    });
+  }
 }
