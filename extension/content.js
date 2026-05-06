@@ -1110,6 +1110,37 @@ function createAutobidderFloatingPanel() {
       color: #991b1b;
       font-weight: bold;
     }
+
+    #applypilot-launcher {
+      position: fixed;
+      right: 18px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      border: 1px solid #e5e7eb;
+      background: #ffffff;
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+      z-index: 2147483647;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 7px;
+    }
+
+    #applypilot-launcher:hover {
+      transform: translateY(-50%) scale(1.05);
+      box-shadow: 0 14px 35px rgba(15, 23, 42, 0.24);
+    }
+
+    #applypilot-launcher img {
+      width: 28px;
+      height: 28px;
+      object-fit: contain;
+      display: block;
+    }
   `;
 
   document.documentElement.appendChild(style);
@@ -1252,10 +1283,7 @@ function bindAutobidderPanelEvents() {
 
   if (closeBtn) {
     closeBtn.addEventListener("click", () => {
-      const panel = document.getElementById("autobidder-floating-panel");
-      if (panel) {
-        panel.remove();
-      }
+      hideApplyPilotPanelToLauncher();
     });
   }
 
@@ -3324,6 +3352,7 @@ async function autoDetectAndShowAutobidderPanel() {
     const preferences = await getAutobidderPreferences();
 
     if (!preferences.autoShowPanel) {
+      createApplyPilotLauncher();
       return;
     }
 
@@ -3365,7 +3394,7 @@ async function autoDetectAndShowAutobidderPanel() {
 
     if (detection.is_job_posting && detection.confidence !== "Low") {
       autobidderDetectedJobPage = detection;
-      createAutobidderFloatingPanel();
+      showApplyPilotPanel();
 
       const atsType = getAtsType();
       const jobInfoBox = document.getElementById("autobidder-job-info");
@@ -5609,3 +5638,89 @@ function getGreenhouseQuestionAnswerFallback(questionText, candidate) {
 
   return "";
 }
+
+function createApplyPilotLauncher() {
+  if (document.getElementById("applypilot-launcher")) {
+    return;
+  }
+
+  const logoUrl = chrome.runtime.getURL("assets/icon48.png");
+
+  const launcher = document.createElement("button");
+  launcher.id = "applypilot-launcher";
+  launcher.title = "Open ApplyPilot";
+
+  launcher.innerHTML = `
+    <img src="${logoUrl}" alt="ApplyPilot" />
+  `;
+
+  launcher.addEventListener("click", () => {
+    showApplyPilotPanel();
+  });
+
+  document.body.appendChild(launcher);
+}
+
+function removeApplyPilotLauncher() {
+  const launcher = document.getElementById("applypilot-launcher");
+
+  if (launcher) {
+    launcher.remove();
+  }
+}
+
+function hideApplyPilotPanelToLauncher() {
+  const panel = document.getElementById("autobidder-floating-panel");
+
+  if (panel) {
+    panel.style.display = "none";
+  }
+
+  createApplyPilotLauncher();
+}
+
+function showApplyPilotPanel() {
+  removeApplyPilotLauncher();
+
+  let panel = document.getElementById("autobidder-floating-panel");
+
+  if (!panel) {
+    createAutobidderFloatingPanel();
+    panel = document.getElementById("autobidder-floating-panel");
+  }
+
+  if (panel) {
+    panel.style.display = "block";
+  }
+}
+
+function toggleApplyPilotPanel() {
+  const panel = document.getElementById("autobidder-floating-panel");
+  const launcher = document.getElementById("applypilot-launcher");
+
+  if (panel && panel.style.display !== "none") {
+    hideApplyPilotPanelToLauncher();
+    return;
+  }
+
+  if (launcher || !panel) {
+    showApplyPilotPanel();
+    return;
+  }
+
+  showApplyPilotPanel();
+}
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === "APPLYPILOT_TOGGLE_PANEL") {
+    toggleApplyPilotPanel();
+
+    sendResponse({
+      success: true,
+    });
+
+    return true;
+  }
+
+  return false;
+});

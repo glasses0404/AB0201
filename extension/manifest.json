@@ -1,34 +1,51 @@
 {
   "manifest_version": 3,
-  "name": "Smart Autobidder Assistant",
+  "name": "ApplyPilot",
   "version": "1.0.0",
-  "description": "Capture job pages, generate application drafts, and autofill basic fields.",
+  "description": "AI job application assistant for faster, smarter applications.",
   "permissions": [
     "activeTab",
     "scripting",
-    "clipboardWrite",
     "storage",
-    "unlimitedStorage"
+    "unlimitedStorage",
+    "clipboardWrite"
   ],
   "host_permissions": ["http://127.0.0.1:8000/*", "http://localhost:8000/*"],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "Autobidder Assistant"
+    "default_title": "ApplyPilot",
+    "default_icon": {
+      "16": "assets/icon16.png",
+      "32": "assets/icon32.png",
+      "48": "assets/icon48.png",
+      "128": "assets/icon128.png"
+    }
   },
+  "icons": {
+    "16": "assets/icon16.png",
+    "32": "assets/icon32.png",
+    "48": "assets/icon48.png",
+    "128": "assets/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "assets/applypilot-logo.png",
+        "assets/icon16.png",
+        "assets/icon32.png",
+        "assets/icon48.png",
+        "assets/icon128.png"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
       "js": ["content.js"],
       "run_at": "document_idle"
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": ["assets/applypilot-logo.png"],
-      "matches": ["<all_urls>"]
     }
   ]
 }

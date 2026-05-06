@@ -60,6 +60,31 @@ async function patchJsonToBackend(path, payload, apiBaseUrl = API_BASE_URL) {
   return await response.json();
 }
 
+chrome.action.onClicked.addListener(async (tab) => {
+  if (!tab || !tab.id) {
+    return;
+  }
+
+  try {
+    await chrome.tabs.sendMessage(tab.id, {
+      type: "APPLYPILOT_TOGGLE_PANEL",
+    });
+  } catch (error) {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ["content.js"],
+      });
+
+      await chrome.tabs.sendMessage(tab.id, {
+        type: "APPLYPILOT_TOGGLE_PANEL",
+      });
+    } catch (innerError) {
+      console.error("ApplyPilot panel open error:", innerError);
+    }
+  }
+});
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === "BACKEND_POST_JSON") {
     postJsonToBackend(
