@@ -12,115 +12,219 @@ function createAutobidderFloatingPanel() {
   panel.id = "autobidder-floating-panel";
 
   panel.innerHTML = `
-    <div id="autobidder-panel-header">
+  <div id="autobidder-panel-header">
+    <div>
       <strong>Autobidder</strong>
-      <button id="autobidder-close-btn">×</button>
+      <div id="autobidder-panel-subtitle">Job assistant</div>
+    </div>
+    <button id="autobidder-close-btn">×</button>
+  </div>
+
+  <div id="autobidder-panel-body">
+    <div id="autobidder-job-info">
+      Waiting for job page analysis...
     </div>
 
-    <div id="autobidder-panel-body">
-      <div id="autobidder-job-info">Detecting job page...</div>
+    <div id="autobidder-progress-area">
+      <div id="autobidder-current-row">
+        <div id="autobidder-spinner"></div>
+        <div id="autobidder-current-step">Ready</div>
+      </div>
 
+      <div id="autobidder-progress-log"></div>
+    </div>
+
+    <div id="autobidder-actions">
       <button id="autobidder-run-analysis-btn">Analyze Job</button>
-      <button id="autobidder-autofill-btn">Autofill</button>
+      <button id="autobidder-autofill-btn">Autofill Fields + Resume + Answers</button>
       <button id="autobidder-copy-cover-letter-btn">Copy Cover Letter</button>
-
-      <div id="autobidder-result-box"></div>
+      <button id="autobidder-mark-submitted-btn">Mark Submitted + Sync</button>
     </div>
-  `;
+
+    <div id="autobidder-result-box"></div>
+  </div>
+`;
 
   const style = document.createElement("style");
   style.innerHTML = `
-    #autobidder-floating-panel {
-      position: fixed;
-      right: 20px;
-      bottom: 20px;
-      width: 360px;
-      max-height: 620px;
-      overflow-y: auto;
-      background: #ffffff;
-      color: #111827;
-      border: 1px solid #d1d5db;
-      border-radius: 14px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-      z-index: 2147483647;
-      font-family: Arial, sans-serif;
-      font-size: 13px;
-    }
+  #autobidder-floating-panel {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    width: 390px;
+    max-height: 680px;
+    overflow-y: auto;
+    background: #ffffff;
+    color: #111827;
+    border: 1px solid #d1d5db;
+    border-radius: 16px;
+    box-shadow: 0 16px 45px rgba(0,0,0,0.22);
+    z-index: 2147483647;
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+  }
 
-    #autobidder-panel-header {
-      background: #111827;
-      color: white;
-      padding: 10px 12px;
-      border-radius: 14px 14px 0 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
+  #autobidder-panel-header {
+    background: #111827;
+    color: white;
+    padding: 12px 14px;
+    border-radius: 16px 16px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
 
-    #autobidder-close-btn {
-      background: transparent;
-      color: white;
-      border: none;
-      font-size: 20px;
-      cursor: pointer;
-    }
+  #autobidder-panel-subtitle {
+    font-size: 11px;
+    opacity: 0.8;
+    margin-top: 2px;
+  }
 
-    #autobidder-panel-body {
-      padding: 12px;
-    }
+  #autobidder-close-btn {
+    background: transparent;
+    color: white;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    line-height: 1;
+  }
 
-    #autobidder-panel-body button {
-      width: 100%;
-      margin-top: 8px;
-      padding: 9px;
-      border: none;
-      border-radius: 8px;
-      background: #2563eb;
-      color: white;
-      cursor: pointer;
-      font-size: 13px;
-    }
+  #autobidder-panel-body {
+    padding: 12px;
+  }
 
-    #autobidder-panel-body button:hover {
-      background: #1d4ed8;
-    }
+  #autobidder-job-info {
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    padding: 9px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
 
-    #autobidder-job-info {
-      background: #f3f4f6;
-      border: 1px solid #e5e7eb;
-      padding: 8px;
-      border-radius: 8px;
-      margin-bottom: 8px;
-      line-height: 1.4;
-    }
+  #autobidder-progress-area {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 9px;
+    margin-bottom: 10px;
+  }
 
-    #autobidder-result-box {
-      margin-top: 10px;
-      white-space: pre-wrap;
-      font-size: 12px;
-      background: #f9fafb;
-      border: 1px solid #e5e7eb;
-      padding: 8px;
-      border-radius: 8px;
-      max-height: 360px;
-      overflow-y: auto;
-    }
+  #autobidder-current-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 22px;
+  }
 
-    .autobidder-good {
-      color: #166534;
-      font-weight: bold;
-    }
+  #autobidder-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #e5e7eb;
+    border-top: 2px solid #2563eb;
+    border-radius: 50%;
+    animation: autobidder-spin 0.8s linear infinite;
+    display: none;
+    flex-shrink: 0;
+  }
 
-    .autobidder-warning {
-      color: #92400e;
-      font-weight: bold;
-    }
+  @keyframes autobidder-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
 
-    .autobidder-danger {
-      color: #991b1b;
-      font-weight: bold;
-    }
-  `;
+  #autobidder-current-step {
+    font-size: 12px;
+    font-weight: bold;
+    color: #111827;
+  }
+
+  #autobidder-progress-log {
+    margin-top: 8px;
+    max-height: 130px;
+    overflow-y: auto;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .autobidder-log-line {
+    padding: 3px 0;
+    border-bottom: 1px solid #eef2f7;
+  }
+
+  .autobidder-log-success {
+    color: #166534;
+  }
+
+  .autobidder-log-error {
+    color: #991b1b;
+  }
+
+  .autobidder-log-warning {
+    color: #92400e;
+  }
+
+  .autobidder-log-info {
+    color: #374151;
+  }
+
+  .autobidder-log-loading {
+    color: #1d4ed8;
+  }
+
+  #autobidder-actions {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  #autobidder-panel-body button {
+    width: 100%;
+    padding: 9px;
+    border: none;
+    border-radius: 9px;
+    background: #2563eb;
+    color: white;
+    cursor: pointer;
+    font-size: 13px;
+  }
+
+  #autobidder-panel-body button:hover {
+    background: #1d4ed8;
+  }
+
+  #autobidder-panel-body button:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+  }
+
+  #autobidder-result-box {
+    margin-top: 10px;
+    white-space: pre-wrap;
+    font-size: 12px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    padding: 9px;
+    border-radius: 10px;
+    max-height: 360px;
+    overflow-y: auto;
+  }
+
+  .autobidder-good {
+    color: #166534;
+    font-weight: bold;
+  }
+
+  .autobidder-warning {
+    color: #92400e;
+    font-weight: bold;
+  }
+
+  .autobidder-danger {
+    color: #991b1b;
+    font-weight: bold;
+  }
+`;
 
   document.documentElement.appendChild(style);
   document.body.appendChild(panel);
@@ -144,6 +248,11 @@ function createAutobidderFloatingPanel() {
     .addEventListener("click", async () => {
       await runAutobidderAutofillFromPanel();
     });
+  document
+    .getElementById("autobidder-mark-submitted-btn")
+    .addEventListener("click", async () => {
+      await runAutobidderMarkSubmittedAndSync();
+    });
 
   document
     .getElementById("autobidder-copy-cover-letter-btn")
@@ -165,6 +274,128 @@ function createAutobidderFloatingPanel() {
 
       resultBox.innerText = "Cover letter copied to clipboard.";
     });
+}
+
+function getPanelElement(id) {
+  return document.getElementById(id);
+}
+
+function setPanelButtonsDisabled(disabled) {
+  const buttonIds = [
+    "autobidder-run-analysis-btn",
+    "autobidder-autofill-btn",
+    "autobidder-copy-cover-letter-btn",
+    "autobidder-mark-submitted-btn",
+  ];
+
+  buttonIds.forEach((id) => {
+    const button = getPanelElement(id);
+    if (button) {
+      button.disabled = disabled;
+    }
+  });
+}
+
+function clearPanelProgress() {
+  const log = getPanelElement("autobidder-progress-log");
+  const currentStep = getPanelElement("autobidder-current-step");
+  const spinner = getPanelElement("autobidder-spinner");
+
+  if (log) {
+    log.innerHTML = "";
+  }
+
+  if (currentStep) {
+    currentStep.innerText = "Ready";
+  }
+
+  if (spinner) {
+    spinner.style.display = "none";
+  }
+}
+
+function setPanelLoading(isLoading, message = "") {
+  const spinner = getPanelElement("autobidder-spinner");
+  const currentStep = getPanelElement("autobidder-current-step");
+
+  if (spinner) {
+    spinner.style.display = isLoading ? "block" : "none";
+  }
+
+  if (currentStep && message) {
+    currentStep.innerText = message;
+  }
+
+  setPanelButtonsDisabled(isLoading);
+}
+
+function setPanelStep(message) {
+  const spinner = getPanelElement("autobidder-spinner");
+  const currentStep = getPanelElement("autobidder-current-step");
+
+  if (spinner) {
+    spinner.style.display = "block";
+  }
+
+  if (currentStep) {
+    currentStep.innerText = message;
+  }
+}
+
+function addPanelLog(message, type = "info") {
+  const log = getPanelElement("autobidder-progress-log");
+
+  if (!log) return;
+
+  const line = document.createElement("div");
+  line.className = `autobidder-log-line autobidder-log-${type}`;
+
+  const iconMap = {
+    success: "✓",
+    error: "✕",
+    warning: "!",
+    loading: "⏳",
+    info: "•",
+  };
+
+  const icon = iconMap[type] || "•";
+
+  line.innerText = `${icon} ${message}`;
+
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+function finishPanelProgress(message = "Done.") {
+  const spinner = getPanelElement("autobidder-spinner");
+  const currentStep = getPanelElement("autobidder-current-step");
+
+  if (spinner) {
+    spinner.style.display = "none";
+  }
+
+  if (currentStep) {
+    currentStep.innerText = message;
+  }
+
+  setPanelButtonsDisabled(false);
+  addPanelLog(message, "success");
+}
+
+function failPanelProgress(message = "Something went wrong.") {
+  const spinner = getPanelElement("autobidder-spinner");
+  const currentStep = getPanelElement("autobidder-current-step");
+
+  if (spinner) {
+    spinner.style.display = "none";
+  }
+
+  if (currentStep) {
+    currentStep.innerText = message;
+  }
+
+  setPanelButtonsDisabled(false);
+  addPanelLog(message, "error");
 }
 
 function getFieldLabel(input) {
@@ -529,21 +760,24 @@ function uploadResumeFileToPage(resumeData) {
   };
 }
 
-async function postJson(url, payload) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
+async function postJson(pathOrUrl, payload) {
+  let path = pathOrUrl;
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText);
+  if (pathOrUrl.startsWith(AUTOBIDDER_API_BASE_URL)) {
+    path = pathOrUrl.replace(AUTOBIDDER_API_BASE_URL, "");
   }
 
-  return await response.json();
+  const response = await chrome.runtime.sendMessage({
+    type: "BACKEND_POST_JSON",
+    path,
+    payload,
+  });
+
+  if (!response || !response.success) {
+    throw new Error(response?.message || "Backend request failed.");
+  }
+
+  return response.data;
 }
 
 async function runAutobidderPageAnalysis() {
@@ -551,6 +785,10 @@ async function runAutobidderPageAnalysis() {
   const jobInfoBox = document.getElementById("autobidder-job-info");
 
   try {
+    clearPanelProgress();
+    setPanelLoading(true, "Starting job analysis...");
+    addPanelLog("Reading current job page", "loading");
+
     resultBox.innerText = "Analyzing job page...";
 
     const pageData = {
@@ -559,34 +797,76 @@ async function runAutobidderPageAnalysis() {
       page_text: getVisiblePageText(),
     };
 
+    addPanelLog("Page content captured", "success");
+
+    setPanelStep("Checking active candidate...");
     const active = await getActiveCandidateFromStorage();
 
     if (!active.candidateId) {
+      failPanelProgress("No active candidate selected.");
       resultBox.innerText =
         "Please open the extension popup and select an active candidate first.";
       return;
     }
 
+    addPanelLog(`Active candidate found: #${active.candidateId}`, "success");
+
+    setPanelStep("Detecting job posting...");
     const detection = await postJson(
       `${AUTOBIDDER_API_BASE_URL}/detect-job-page`,
       pageData,
     );
 
     if (!detection.is_job_posting) {
+      failPanelProgress("This page does not look like a job posting.");
       resultBox.innerText = `This page does not look like a job posting.\nReason: ${detection.reason}`;
       return;
     }
 
-    jobInfoBox.innerHTML = `
-      <strong>Job Detected</strong><br>
-      Company: ${detection.company_name || "Unknown"}<br>
-      Title: ${detection.job_title || "Unknown"}<br>
-      Confidence: ${detection.confidence}
-    `;
+    addPanelLog("Job posting detected", "success");
 
     const atsType = getAtsType();
 
-    const screeningFields = detectAllScreeningFieldsForAts(atsType);
+    jobInfoBox.innerHTML = `
+      <strong>Job Posting Detected</strong><br>
+      Company: ${detection.company_name || "Unknown"}<br>
+      Title: ${detection.job_title || "Unknown"}<br>
+      ATS: ${atsType}<br>
+      Confidence: ${detection.confidence}
+    `;
+
+    setPanelStep("Detecting screening questions...");
+
+    let screeningFields = [];
+
+    if (typeof detectAllScreeningFieldsForAts === "function") {
+      screeningFields = detectAllScreeningFieldsForAts(atsType);
+    } else if (
+      atsType === "greenhouse" &&
+      typeof detectGreenhouseScreeningFields === "function"
+    ) {
+      screeningFields = detectGreenhouseScreeningFields();
+    } else if (
+      atsType === "lever" &&
+      typeof detectLeverScreeningFields === "function"
+    ) {
+      screeningFields = detectLeverScreeningFields();
+    } else if (
+      atsType === "ashby" &&
+      typeof detectAshbyScreeningFields === "function"
+    ) {
+      screeningFields = detectAshbyScreeningFields();
+    } else {
+      screeningFields = detectScreeningFields();
+    }
+
+    addPanelLog(
+      `Detected ${screeningFields.length} screening questions`,
+      "success",
+    );
+
+    setPanelStep("Creating application draft...");
+    addPanelLog("Generating match score and cover letter", "loading");
 
     const applicationPayload = {
       candidate_id: Number(active.candidateId),
@@ -603,15 +883,9 @@ async function runAutobidderPageAnalysis() {
       applicationPayload,
     );
 
-    let matchAnalysis = null;
+    addPanelLog("Application draft created", "success");
 
-    try {
-      matchAnalysis = applicationDraft.match_analysis_json
-        ? JSON.parse(applicationDraft.match_analysis_json)
-        : null;
-    } catch (error) {
-      matchAnalysis = null;
-    }
+    setPanelStep("Preparing screening answers...");
 
     let screeningAnswerResult = { answers: [] };
 
@@ -623,12 +897,31 @@ async function runAutobidderPageAnalysis() {
           fields: screeningFields,
         },
       );
+
+      addPanelLog(
+        `Generated ${screeningAnswerResult.answers.length} screening answers`,
+        "success",
+      );
+    } else {
+      addPanelLog("No screening questions found", "warning");
     }
 
     chrome.storage.local.set({
       latestOnPageApplicationDraft: applicationDraft,
       latestOnPageScreeningAnswers: screeningAnswerResult.answers,
     });
+
+    setPanelStep("Rendering results...");
+
+    let matchAnalysis = null;
+
+    try {
+      matchAnalysis = applicationDraft.match_analysis_json
+        ? JSON.parse(applicationDraft.match_analysis_json)
+        : null;
+    } catch (error) {
+      matchAnalysis = null;
+    }
 
     const screeningPreview = screeningAnswerResult.answers.length
       ? screeningAnswerResult.answers
@@ -656,44 +949,47 @@ Manual Review: ${item.manual_review_required ? "Yes" : "No"}`;
     const strengths = matchAnalysis?.strengths?.join(", ") || "-";
 
     resultBox.innerHTML = `
-  <div>
-    <strong>Application Draft Created</strong><br><br>
+      <div>
+        <strong>Application Draft Created</strong><br><br>
 
-    <strong>ATS:</strong> ${atsType}<br>
-    <strong>Company:</strong> ${applicationDraft.company_name}<br>
-    <strong>Job Title:</strong> ${applicationDraft.job_title}<br>
-    <strong>Overall Match:</strong> <span class="${matchClass}">${applicationDraft.match_score}%</span><br>
-    <strong>Recommendation:</strong> ${matchAnalysis?.recommendation || "Needs Review"}<br>
-    <strong>Duplicate:</strong> ${applicationDraft.duplicate_status}<br>
-    <strong>Status:</strong> ${applicationDraft.status}<br><br>
+        <strong>ATS:</strong> ${atsType}<br>
+        <strong>Company:</strong> ${applicationDraft.company_name}<br>
+        <strong>Job Title:</strong> ${applicationDraft.job_title}<br>
+        <strong>Overall Match:</strong> <span class="${matchClass}">${applicationDraft.match_score}%</span><br>
+        <strong>Recommendation:</strong> ${matchAnalysis?.recommendation || "Needs Review"}<br>
+        <strong>Duplicate:</strong> ${applicationDraft.duplicate_status}<br>
+        <strong>Status:</strong> ${applicationDraft.status}<br><br>
 
-    <strong>Match Breakdown</strong><br>
-    Required Skills Score: ${matchAnalysis?.required_skills_score ?? "-"}<br>
-    Preferred Skills Score: ${matchAnalysis?.preferred_skills_score ?? "-"}<br>
-    Industry Score: ${matchAnalysis?.industry_score ?? "-"}<br>
-    Seniority Score: ${matchAnalysis?.seniority_score ?? "-"}<br>
-    Location Score: ${matchAnalysis?.location_score ?? "-"}<br><br>
+        <strong>Match Breakdown</strong><br>
+        Required Skills Score: ${matchAnalysis?.required_skills_score ?? "-"}<br>
+        Preferred Skills Score: ${matchAnalysis?.preferred_skills_score ?? "-"}<br>
+        Industry Score: ${matchAnalysis?.industry_score ?? "-"}<br>
+        Seniority Score: ${matchAnalysis?.seniority_score ?? "-"}<br>
+        Location Score: ${matchAnalysis?.location_score ?? "-"}<br><br>
 
-    <strong>Required Skills:</strong> ${requiredSkills}<br>
-    <strong>Matched Skills:</strong> ${matchedSkills}<br>
-    <strong>Missing Required:</strong> ${missingRequired}<br>
-    <strong>Strengths:</strong> ${strengths}<br>
-    <strong>Risk Flags:</strong> ${riskFlags}<br><br>
+        <strong>Required Skills:</strong> ${requiredSkills}<br>
+        <strong>Matched Skills:</strong> ${matchedSkills}<br>
+        <strong>Missing Required:</strong> ${missingRequired}<br>
+        <strong>Strengths:</strong> ${strengths}<br>
+        <strong>Risk Flags:</strong> ${riskFlags}<br><br>
 
-    <strong>Summary</strong><br>
-    <pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">${matchAnalysis?.summary || "No summary available."}</pre>
+        <strong>Summary</strong><br>
+        <pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">${matchAnalysis?.summary || "No summary available."}</pre>
 
-    <strong>Screening Questions:</strong> ${screeningFields.length}<br><br>
+        <strong>Screening Questions:</strong> ${screeningFields.length}<br><br>
 
-    <strong>Screening Answers</strong><br>
-    <pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">${screeningPreview}</pre>
+        <strong>Screening Answers</strong><br>
+        <pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">${screeningPreview}</pre>
 
-    <strong>Cover Letter</strong><br>
-    <pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">${applicationDraft.cover_letter || "No cover letter generated."}</pre>
-  </div>
-`;
+        <strong>Cover Letter</strong><br>
+        <pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">${applicationDraft.cover_letter || "No cover letter generated."}</pre>
+      </div>
+    `;
+
+    finishPanelProgress("Analysis complete.");
   } catch (error) {
     console.error(error);
+    failPanelProgress("Analysis failed.");
     resultBox.innerText = "Autobidder analysis error: " + error.message;
   }
 }
@@ -996,40 +1292,62 @@ async function runAutobidderAutofillFromPanel() {
   const resultBox = document.getElementById("autobidder-result-box");
 
   try {
+    clearPanelProgress();
+    setPanelLoading(true, "Starting autofill...");
+    addPanelLog("Loading active candidate", "loading");
+
     resultBox.innerText = "Running autofill...";
 
     const active = await getActiveCandidateFromStorage();
 
     if (!active.candidateId) {
+      failPanelProgress("No active candidate selected.");
       resultBox.innerText =
         "Please select an active candidate in the extension popup first.";
       return;
     }
 
-    const candidate = await fetch(
-      `${AUTOBIDDER_API_BASE_URL}/candidates/${active.candidateId}`,
-    ).then((r) => r.json());
+    addPanelLog(`Active candidate found: #${active.candidateId}`, "success");
 
-    // 1. Basic profile autofill
+    setPanelStep("Loading candidate profile...");
+    const candidate = await getJson(
+      `${AUTOBIDDER_API_BASE_URL}/candidates/${active.candidateId}`,
+    );
+
+    addPanelLog("Candidate profile loaded", "success");
+
+    setPanelStep("Filling profile fields...");
+
     const atsType = getAtsType();
 
-    let basicFillMessage = "Basic profile fields filled.";
+    let basicFillMessage = "Generic profile fields filled.";
 
-    if (atsType === "greenhouse") {
+    if (
+      atsType === "greenhouse" &&
+      typeof fillGreenhouseBasicFields === "function"
+    ) {
       const greenhouseResult = fillGreenhouseBasicFields(candidate);
       basicFillMessage = `Greenhouse fields filled: ${greenhouseResult.filledCount}`;
-    } else if (atsType === "lever") {
+    } else if (
+      atsType === "lever" &&
+      typeof fillLeverBasicFields === "function"
+    ) {
       const leverResult = fillLeverBasicFields(candidate);
       basicFillMessage = `Lever fields filled: ${leverResult.filledCount}`;
-    } else if (atsType === "ashby") {
+    } else if (
+      atsType === "ashby" &&
+      typeof fillAshbyBasicFields === "function"
+    ) {
       const ashbyResult = fillAshbyBasicFields(candidate);
       basicFillMessage = `Ashby fields filled: ${ashbyResult.filledCount}`;
     } else {
       autofillBasicFields(candidate);
-      basicFillMessage = "Generic profile fields filled.";
     }
 
-    // 2. Resume upload
+    addPanelLog(basicFillMessage, "success");
+
+    setPanelStep("Uploading resume...");
+
     let resumeMessage = "No saved resume found for this candidate.";
 
     const resumeData = await getSavedResumeFileForCandidateFromStorage(
@@ -1038,10 +1356,20 @@ async function runAutobidderAutofillFromPanel() {
 
     if (resumeData) {
       const resumeResult = uploadResumeFileToPage(resumeData);
+
+      if (resumeResult.success) {
+        addPanelLog(resumeResult.message, "success");
+      } else {
+        addPanelLog(resumeResult.message, "warning");
+      }
+
       resumeMessage = resumeResult.message;
+    } else {
+      addPanelLog(resumeMessage, "warning");
     }
 
-    // 3. Screening answers
+    setPanelStep("Filling screening answers...");
+
     const storageData = await new Promise((resolve) => {
       chrome.storage.local.get(["latestOnPageScreeningAnswers"], resolve);
     });
@@ -1055,20 +1383,34 @@ async function runAutobidderAutofillFromPanel() {
       const fillResult = fillScreeningAnswers(answers);
 
       screeningMessage = `Screening answers filled: ${fillResult.filled.length}, skipped: ${fillResult.skipped.length}`;
+
+      addPanelLog(screeningMessage, "success");
+
+      if (fillResult.skipped.length > 0) {
+        addPanelLog(
+          `${fillResult.skipped.length} screening answers need manual review`,
+          "warning",
+        );
+      }
+    } else {
+      addPanelLog(screeningMessage, "warning");
     }
 
     resultBox.innerText = `
 Autofill completed.
 
 Filled:
-- Basic profile fields
+- ${basicFillMessage}
 - ${resumeMessage}
 - ${screeningMessage}
 
 Please review every field before submitting.
 `.trim();
+
+    finishPanelProgress("Autofill complete. Please review before submitting.");
   } catch (error) {
     console.error(error);
+    failPanelProgress("Autofill failed.");
     resultBox.innerText = "Autofill error: " + error.message;
   }
 }
@@ -1775,4 +2117,97 @@ function fillGreenhouseBasicFields(profile) {
     success: true,
     filledCount,
   };
+}
+
+async function runAutobidderMarkSubmittedAndSync() {
+  const resultBox = document.getElementById("autobidder-result-box");
+
+  try {
+    clearPanelProgress();
+    setPanelLoading(true, "Marking application as submitted...");
+    addPanelLog("Loading latest application draft", "loading");
+
+    const storageData = await new Promise((resolve) => {
+      chrome.storage.local.get(["latestOnPageApplicationDraft"], resolve);
+    });
+
+    const draft = storageData.latestOnPageApplicationDraft;
+
+    if (!draft || !draft.id) {
+      failPanelProgress("No application draft found.");
+      resultBox.innerText =
+        "No application draft found. Click Analyze Job first.";
+      return;
+    }
+
+    addPanelLog(`Application found: #${draft.id}`, "success");
+
+    setPanelStep("Updating application status...");
+
+    const updatedApplication = await postJson(
+      `${AUTOBIDDER_API_BASE_URL}/applications/${draft.id}/status`,
+      {
+        status: "Submitted",
+      },
+    );
+
+    addPanelLog("Application marked as submitted", "success");
+
+    setPanelStep("Syncing application history to Google Sheets...");
+
+    await postJson(
+      `${AUTOBIDDER_API_BASE_URL}/sync/google-sheets/applications?today_only=true&triggered_by=On-page%20Panel`,
+      {},
+    );
+
+    addPanelLog("Applications sheet synced", "success");
+
+    setPanelStep("Updating dashboard...");
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    await postJson(
+      `${AUTOBIDDER_API_BASE_URL}/sync/google-sheets/dashboard?report_date=${today}`,
+      {},
+    );
+
+    addPanelLog("Dashboard synced", "success");
+
+    chrome.storage.local.set({
+      latestOnPageApplicationDraft: updatedApplication,
+    });
+
+    resultBox.innerText = `
+Application submitted and synced.
+
+Application ID: ${updatedApplication.id}
+Status: ${updatedApplication.status}
+Submitted At: ${updatedApplication.submitted_at || "-"}
+`.trim();
+
+    finishPanelProgress("Submitted and synced successfully.");
+  } catch (error) {
+    console.error(error);
+    failPanelProgress("Submit/sync failed.");
+    resultBox.innerText = "Submit/sync error: " + error.message;
+  }
+}
+
+async function getJson(pathOrUrl) {
+  let path = pathOrUrl;
+
+  if (pathOrUrl.startsWith(AUTOBIDDER_API_BASE_URL)) {
+    path = pathOrUrl.replace(AUTOBIDDER_API_BASE_URL, "");
+  }
+
+  const response = await chrome.runtime.sendMessage({
+    type: "BACKEND_GET_JSON",
+    path,
+  });
+
+  if (!response || !response.success) {
+    throw new Error(response?.message || "Backend GET request failed.");
+  }
+
+  return response.data;
 }
