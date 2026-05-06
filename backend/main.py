@@ -467,6 +467,20 @@ def export_applications_csv(
             "Content-Disposition": f"attachment; filename={filename}"
         }
     )
+@app.get("/applications/find-existing", response_model=ApplicationResponse | None)
+def find_existing_application(
+    candidate_id: int,
+    original_job_url: str,
+    db: Session = Depends(get_db)
+):
+    canonical_url = create_canonical_url(original_job_url)
+
+    application = db.query(Application).filter(
+        Application.candidate_id == candidate_id,
+        Application.canonical_job_url == canonical_url
+    ).order_by(Application.created_at.desc()).first()
+
+    return application
 
 @app.get("/applications/{application_id}", response_model=ApplicationResponse)
 def get_application(application_id: int, db: Session = Depends(get_db)):

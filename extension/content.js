@@ -4,6 +4,10 @@ let autobidderDetectedJobPage = null;
 let autobidderFloatingPanel = null;
 let autobidderAutoAnalysisStarted = false;
 let autobidderLatestScreeningFields = [];
+let autobidderPanelMode = "work"; // work | settings
+let autobidderActiveWorkTab = "autofill";
+let autobidderActiveSettingsTab = "candidate";
+let autobidderCandidatesCache = [];
 
 function createAutobidderFloatingPanel() {
   if (document.getElementById("autobidder-floating-panel")) {
@@ -14,366 +18,883 @@ function createAutobidderFloatingPanel() {
   panel.id = "autobidder-floating-panel";
 
   panel.innerHTML = `
-  <div id="autobidder-panel-header">
-    <div>
-      <strong>Autobidder</strong>
-      <div id="autobidder-panel-subtitle">Job assistant</div>
-    </div>
-    <button id="autobidder-close-btn">×</button>
-  </div>
-
-  <div id="autobidder-panel-body">
-    <div id="autobidder-job-info">
-      Waiting for job page analysis...
-    </div>
-
-    <div id="autobidder-progress-area">
-      <div id="autobidder-current-row">
-        <div id="autobidder-spinner"></div>
-        <div id="autobidder-current-step">Ready</div>
+    <div id="autobidder-panel-header">
+      <div id="autobidder-brand-area">
+        <div id="autobidder-logo-mark">A</div>
+        <div>
+          <div id="autobidder-brand-title">Autobidder</div>
+          <div id="autobidder-panel-subtitle">Job assistant</div>
+        </div>
       </div>
 
-      <div id="autobidder-progress-log"></div>
+      <div id="autobidder-header-actions">
+        <button id="autobidder-report-btn" title="Open report">Report</button>
+        <button id="autobidder-settings-btn" title="Settings">⚙</button>
+        <button id="autobidder-close-btn" title="Close">×</button>
+      </div>
     </div>
 
-    <div id="autobidder-actions">
-      <button id="autobidder-run-analysis-btn">Analyze Job</button>
-      <button id="autobidder-autofill-btn">Autofill Fields + Resume + Answers</button>
-      <button id="autobidder-copy-cover-letter-btn">Copy Cover Letter</button>
-      <button id="autobidder-mark-submitted-btn">Mark Submitted + Sync</button>
-    </div>
+    <div id="autobidder-panel-body">
+      <div id="autobidder-work-mode">
+        <div id="autobidder-work-tabs" class="autobidder-tab-row">
+          <button class="autobidder-tab active" data-work-tab="autofill">Autofill</button>
+          <button class="autobidder-tab" data-work-tab="match">Match Score</button>
+          <button class="autobidder-tab" data-work-tab="profile">Profile</button>
+        </div>
 
-    <div id="autobidder-result-box"></div>
-  </div>
-`;
+        <div id="autobidder-work-content">
+          <div id="autobidder-tab-autofill" class="autobidder-tab-panel active">
+            <div id="autobidder-job-info">
+              Waiting for job page analysis...
+            </div>
+
+            <div id="autobidder-progress-area">
+              <div id="autobidder-current-row">
+                <div id="autobidder-spinner"></div>
+                <div id="autobidder-current-step">Ready</div>
+              </div>
+
+              <div id="autobidder-progress-log"></div>
+            </div>
+
+            <div id="autobidder-actions">
+              <button id="autobidder-run-analysis-btn">Analyze Job</button>
+              <button id="autobidder-autofill-btn">Autofill Fields + Resume + Answers</button>
+              <button id="autobidder-copy-cover-letter-btn">Copy Cover Letter</button>
+              <button id="autobidder-mark-submitted-btn">Mark Submitted + Sync</button>
+            </div>
+
+            <div id="autobidder-result-box"></div>
+          </div>
+
+          <div id="autobidder-tab-match" class="autobidder-tab-panel">
+            <div class="autobidder-section-title">Match Score</div>
+            <div id="autobidder-match-summary-box" class="autobidder-card">
+              Run analysis to see structured match details.
+            </div>
+          </div>
+
+          <div id="autobidder-tab-profile" class="autobidder-tab-panel">
+            <div class="autobidder-section-title">Active Profile</div>
+            <div id="autobidder-profile-summary-box" class="autobidder-card">
+              Loading active profile...
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="autobidder-settings-mode" class="hidden">
+        <div id="autobidder-settings-header-row">
+          <button id="autobidder-back-to-work-btn">← Back</button>
+          <strong>Settings</strong>
+        </div>
+
+        <div id="autobidder-settings-tabs" class="autobidder-tab-row">
+          <button class="autobidder-tab active" data-settings-tab="candidate">Candidate</button>
+          <button class="autobidder-tab" data-settings-tab="resume">Resume</button>
+          <button class="autobidder-tab" data-settings-tab="answers">Saved Answers</button>
+          <button class="autobidder-tab" data-settings-tab="integrations">Integrations</button>
+          <button class="autobidder-tab" data-settings-tab="preferences">Preferences</button>
+        </div>
+
+        <div id="autobidder-settings-content">
+          <div id="autobidder-settings-candidate" class="autobidder-tab-panel active">
+            <div class="autobidder-section-title">Candidate</div>
+
+            <div class="autobidder-card">
+              <label class="autobidder-label">Bidder Name</label>
+              <input id="autobidder-settings-bidder-name" class="autobidder-input" placeholder="Example: David" />
+
+              <label class="autobidder-label">Search Candidate</label>
+              <input id="autobidder-settings-candidate-search" class="autobidder-input" placeholder="Search by name, email, or location" />
+
+              <label class="autobidder-label">Select Candidate</label>
+              <select id="autobidder-settings-candidate-select" class="autobidder-input">
+                <option value="">Loading candidates...</option>
+              </select>
+
+              <div id="autobidder-settings-candidate-preview" class="autobidder-mini-preview">
+                No candidate selected.
+              </div>
+
+              <button id="autobidder-set-active-candidate-btn">Set Active Candidate</button>
+            </div>
+          </div>
+
+          <div id="autobidder-settings-resume" class="autobidder-tab-panel">
+            <div class="autobidder-section-title">Resume</div>
+            <div class="autobidder-card">
+              Resume upload and saved resume status will move here.
+            </div>
+          </div>
+
+          <div id="autobidder-settings-answers" class="autobidder-tab-panel">
+            <div class="autobidder-section-title">Saved Answers</div>
+            <div class="autobidder-card">
+              Candidate answer library will move here.
+            </div>
+          </div>
+
+          <div id="autobidder-settings-integrations" class="autobidder-tab-panel">
+            <div class="autobidder-section-title">Integrations</div>
+            <div class="autobidder-card">
+              Backend URL, Google Sheet link, health check, and sync settings will move here.
+            </div>
+          </div>
+
+          <div id="autobidder-settings-preferences" class="autobidder-tab-panel">
+            <div class="autobidder-section-title">Preferences</div>
+            <div class="autobidder-card">
+              Auto-show panel, auto-analyze, auto-upload resume, and auto-sync preferences will move here.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
 
   const style = document.createElement("style");
+  style.id = "autobidder-panel-style";
+
   style.innerHTML = `
-  #autobidder-floating-panel {
-    position: fixed;
-    right: 20px;
-    bottom: 20px;
-    width: 390px;
-    max-height: 680px;
-    overflow-y: auto;
-    background: #ffffff;
-    color: #111827;
-    border: 1px solid #d1d5db;
-    border-radius: 16px;
-    box-shadow: 0 16px 45px rgba(0,0,0,0.22);
-    z-index: 2147483647;
-    font-family: Arial, sans-serif;
-    font-size: 13px;
-  }
+    #autobidder-floating-panel {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      width: 405px;
+      height: min(665px, calc(100vh - 40px));
+      max-height: calc(100vh - 40px);
+      overflow: hidden;
+      background: #ffffff;
+      color: #111827;
+      border: 1px solid #d1d5db;
+      border-radius: 16px;
+      box-shadow: 0 16px 45px rgba(0,0,0,0.22);
+      z-index: 2147483647;
+      font-family: Arial, sans-serif;
+      font-size: 13px;
+    }
 
-  #autobidder-panel-header {
-    background: #111827;
-    color: white;
-    padding: 12px 14px;
-    border-radius: 16px 16px 0 0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
+    #autobidder-tab-autofill {
+      overflow-y: auto;
+    }
 
-  #autobidder-panel-subtitle {
-    font-size: 11px;
-    opacity: 0.8;
-    margin-top: 2px;
-  }
+    #autobidder-progress-log {
+      max-height: 110px;
+    }
 
-  #autobidder-close-btn {
-    background: transparent;
-    color: white;
-    border: none;
-    font-size: 22px;
-    cursor: pointer;
-    line-height: 1;
-  }
+    #autobidder-result-box {
+      max-height: 230px;
+      overflow-y: auto;
+    }
 
-  #autobidder-panel-body {
-    padding: 12px;
-  }
+    #autobidder-panel-header {
+      background: #111827;
+      color: white;
+      padding: 12px 14px;
+      border-radius: 16px 16px 0 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
 
-  #autobidder-job-info {
-    background: #f3f4f6;
-    border: 1px solid #e5e7eb;
-    padding: 9px;
-    border-radius: 10px;
-    margin-bottom: 10px;
-    line-height: 1.4;
-  }
+    #autobidder-brand-area {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
 
-  #autobidder-progress-area {
-    background: #f9fafb;
-    border: 1px solid #e5e7eb;
-    border-radius: 10px;
-    padding: 9px;
-    margin-bottom: 10px;
-  }
+    #autobidder-logo-mark {
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      background: #2563eb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: #ffffff;
+    }
 
-  #autobidder-current-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 22px;
-  }
+    #autobidder-brand-title {
+      font-weight: bold;
+      font-size: 14px;
+      line-height: 1.1;
+    }
 
-  #autobidder-spinner {
-    width: 16px;
-    height: 16px;
-    border: 2px solid #e5e7eb;
-    border-top: 2px solid #2563eb;
-    border-radius: 50%;
-    animation: autobidder-spin 0.8s linear infinite;
-    display: none;
-    flex-shrink: 0;
-  }
+    #autobidder-panel-subtitle {
+      font-size: 11px;
+      opacity: 0.8;
+      margin-top: 2px;
+    }
 
-  @keyframes autobidder-spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
+    #autobidder-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
 
-  #autobidder-current-step {
-    font-size: 12px;
-    font-weight: bold;
-    color: #111827;
-  }
+    #autobidder-header-actions button {
+      border: 1px solid rgba(255,255,255,0.22);
+      background: rgba(255,255,255,0.08);
+      color: white;
+      border-radius: 8px;
+      padding: 6px 8px;
+      cursor: pointer;
+      font-size: 12px;
+      line-height: 1;
+    }
 
-  #autobidder-progress-log {
-    margin-top: 8px;
-    max-height: 130px;
-    overflow-y: auto;
-    font-size: 12px;
-    line-height: 1.45;
-  }
+    #autobidder-report-btn {
+      min-width: 58px;
+    }
 
-  .autobidder-log-line {
-    padding: 3px 0;
-    border-bottom: 1px solid #eef2f7;
-  }
+    #autobidder-settings-btn {
+      width: 30px;
+      height: 28px;
+    }
 
-  .autobidder-log-success {
-    color: #166534;
-  }
+    #autobidder-close-btn {
+      width: 30px;
+      height: 28px;
+      font-size: 18px !important;
+    }
 
-  .autobidder-log-error {
-    color: #991b1b;
-  }
+    #autobidder-panel-body {
+      padding: 12px;
+      height: calc(100% - 58px);
+      overflow: hidden;
+      box-sizing: border-box;
+    }
 
-  .autobidder-log-warning {
-    color: #92400e;
-  }
+    .hidden {
+      display: none !important;
+    }
 
-  .autobidder-log-info {
-    color: #374151;
-  }
+    #autobidder-work-mode,
+    #autobidder-settings-mode {
+      height: 100%;
+      overflow: hidden;
+    }
 
-  .autobidder-log-loading {
-    color: #1d4ed8;
-  }
+    #autobidder-work-content,
+    #autobidder-settings-content {
+      height: calc(100% - 48px);
+      overflow: hidden;
+    }
 
-  #autobidder-actions {
-    display: grid;
-    gap: 8px;
-    margin-bottom: 10px;
-  }
+    .autobidder-tab-panel {
+      display: none;
+    }
 
-  #autobidder-panel-body button {
-    width: 100%;
-    padding: 9px;
-    border: none;
-    border-radius: 9px;
-    background: #2563eb;
-    color: white;
-    cursor: pointer;
-    font-size: 13px;
-  }
+    .autobidder-tab-panel.active {
+      display: block;
+    }
 
-  #autobidder-panel-body button:hover {
-    background: #1d4ed8;
-  }
+    .autobidder-tab-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-bottom: 10px;
+    }
 
-  #autobidder-panel-body button:disabled {
-    background: #9ca3af;
-    cursor: not-allowed;
-  }
+    #autobidder-settings-tabs {
+      grid-template-columns: repeat(2, 1fr);
+      max-height: 92px;
+      overflow-y: auto;
+    }
+    
+    #autobidder-settings-header-row {
+      flex-shrink: 0;
+    }
 
-  #autobidder-result-box {
-    margin-top: 10px;
-    white-space: pre-wrap;
-    font-size: 12px;
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    padding: 9px;
-    border-radius: 10px;
-    max-height: 360px;
-    overflow-y: auto;
-  }
+    .autobidder-label {
+      display: block;
+      font-size: 12px;
+      font-weight: bold;
+      margin-top: 9px;
+      margin-bottom: 4px;
+      color: #111827;
+    }
 
-  .autobidder-good {
-    color: #166534;
-    font-weight: bold;
-  }
+    .autobidder-input {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 13px;
+      background: #ffffff;
+      color: #111827;
+    }
 
-  .autobidder-warning {
-    color: #92400e;
-    font-weight: bold;
-  }
+    .autobidder-mini-preview {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 9px;
+      padding: 8px;
+      margin-top: 10px;
+      margin-bottom: 10px;
+      font-size: 12px;
+      line-height: 1.45;
+    }
 
-  .autobidder-danger {
-    color: #991b1b;
-    font-weight: bold;
-  }
-      .autobidder-job-info-layout {
-    display: grid;
-    grid-template-columns: 1fr 118px;
-    gap: 10px;
-    align-items: center;
-  }
+    .autobidder-tab {
+      border: 1px solid #e5e7eb;
+      background: #f9fafb;
+      color: #4b5563;
+      border-radius: 9px;
+      padding: 8px 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: bold;
+    }
 
-  .autobidder-job-info-left {
-    line-height: 1.45;
-    min-width: 0;
-  }
+    .autobidder-tab.active {
+      background: #eff6ff;
+      color: #1d4ed8;
+      border-color: #bfdbfe;
+    }
 
-  .autobidder-score-card {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 86px;
-  }
+    .autobidder-tab-panel {
+      display: none;
+    }
 
-  .autobidder-score-placeholder {
-    width: 96px;
-    height: 66px;
-    border: 1px dashed #d1d5db;
-    border-radius: 10px;
-    color: #6b7280;
-    font-size: 11px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    line-height: 1.3;
-    background: #ffffff;
-  }
+    .autobidder-tab-panel.active {
+      display: block;
+    }
 
-  .autobidder-gauge-wrap {
-    width: 105px;
-    text-align: center;
-  }
+    .autobidder-section-title {
+      font-weight: bold;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
 
-  .autobidder-gauge {
-    position: relative;
-    width: 86px;
-    height: 45px;
-    overflow: hidden;
-    margin: 0 auto 2px auto;
-  }
+    .autobidder-card {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 10px;
+      line-height: 1.45;
+      margin-bottom: 10px;
+    }
 
-  .autobidder-gauge-bg {
-    position: absolute;
-    width: 86px;
-    height: 86px;
-    border: 9px solid #e5e7eb;
-    border-radius: 50%;
-    box-sizing: border-box;
-  }
+    #autobidder-job-info {
+      background: #f3f4f6;
+      border: 1px solid #e5e7eb;
+      padding: 9px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      line-height: 1.4;
+    }
 
-  .autobidder-gauge-fill {
-    position: absolute;
-    width: 86px;
-    height: 86px;
-    border: 9px solid #2563eb;
-    border-radius: 50%;
-    box-sizing: border-box;
-    clip-path: inset(0 0 50% 0);
-    transform-origin: 50% 50%;
-    transition: transform 0.5s ease;
-  }
+    .autobidder-job-info-layout {
+      display: grid;
+      grid-template-columns: 1fr 118px;
+      gap: 10px;
+      align-items: center;
+    }
 
-  .autobidder-gauge-center {
-    position: absolute;
-    left: 30px;
-    top: 24px;
-    width: 26px;
-    height: 26px;
-    background: #111827;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
+    .autobidder-job-info-left {
+      line-height: 1.45;
+      min-width: 0;
+    }
 
-  .autobidder-gauge-check {
-    color: white;
-    font-size: 14px;
-    font-weight: bold;
-  }
+    .autobidder-score-card {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 86px;
+    }
 
-  .autobidder-score-number {
-    font-size: 20px;
-    font-weight: bold;
-    line-height: 1.1;
-  }
+    .autobidder-score-placeholder {
+      width: 96px;
+      height: 66px;
+      border: 1px dashed #d1d5db;
+      border-radius: 10px;
+      color: #6b7280;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      line-height: 1.3;
+      background: #ffffff;
+    }
 
-  .autobidder-score-label {
-    font-size: 11px;
-    color: #4b5563;
-    margin-top: 1px;
-  }
-`;
+    .autobidder-gauge-wrap {
+      width: 105px;
+      text-align: center;
+    }
+
+    .autobidder-gauge {
+      position: relative;
+      width: 86px;
+      height: 45px;
+      overflow: hidden;
+      margin: 0 auto 2px auto;
+    }
+
+    .autobidder-gauge-bg {
+      position: absolute;
+      width: 86px;
+      height: 86px;
+      border: 9px solid #e5e7eb;
+      border-radius: 50%;
+      box-sizing: border-box;
+    }
+
+    .autobidder-gauge-fill {
+      position: absolute;
+      width: 86px;
+      height: 86px;
+      border: 9px solid #2563eb;
+      border-radius: 50%;
+      box-sizing: border-box;
+      clip-path: inset(0 0 50% 0);
+      transform-origin: 50% 50%;
+      transition: transform 0.5s ease;
+    }
+
+    .autobidder-gauge-center {
+      position: absolute;
+      left: 30px;
+      top: 24px;
+      width: 26px;
+      height: 26px;
+      background: #111827;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .autobidder-gauge-check {
+      color: white;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .autobidder-score-number {
+      font-size: 20px;
+      font-weight: bold;
+      line-height: 1.1;
+    }
+
+    .autobidder-score-label {
+      font-size: 11px;
+      color: #4b5563;
+      margin-top: 1px;
+    }
+
+    #autobidder-progress-area {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 9px;
+      margin-bottom: 10px;
+    }
+
+    #autobidder-current-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 22px;
+    }
+
+    #autobidder-spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid #e5e7eb;
+      border-top: 2px solid #2563eb;
+      border-radius: 50%;
+      animation: autobidder-spin 0.8s linear infinite;
+      display: none;
+      flex-shrink: 0;
+    }
+
+    @keyframes autobidder-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    #autobidder-current-step {
+      font-size: 12px;
+      font-weight: bold;
+      color: #111827;
+    }
+
+    #autobidder-progress-log {
+      margin-top: 8px;
+      max-height: 110px;
+      overflow-y: auto;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .autobidder-log-line {
+      padding: 3px 0;
+      border-bottom: 1px solid #eef2f7;
+    }
+
+    .autobidder-log-success {
+      color: #166534;
+    }
+
+    .autobidder-log-error {
+      color: #991b1b;
+    }
+
+    .autobidder-log-warning {
+      color: #92400e;
+    }
+
+    .autobidder-log-info {
+      color: #374151;
+    }
+
+    .autobidder-log-loading {
+      color: #1d4ed8;
+    }
+
+    #autobidder-actions {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    #autobidder-panel-body button {
+      width: 100%;
+      padding: 9px;
+      border: none;
+      border-radius: 9px;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    #autobidder-panel-body button:hover {
+      background: #1d4ed8;
+    }
+
+    #autobidder-panel-body button:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+
+    #autobidder-result-box {
+      margin-top: 10px;
+      white-space: pre-wrap;
+      font-size: 12px;
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      padding: 9px;
+      border-radius: 10px;
+      max-height: 230px;
+      overflow-y: auto;
+    }
+
+    #autobidder-settings-header-row {
+      display: grid;
+      grid-template-columns: 90px 1fr;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    #autobidder-back-to-work-btn {
+      padding: 7px !important;
+      font-size: 12px !important;
+      background: #374151 !important;
+    }
+
+    .autobidder-good {
+      color: #166534;
+      font-weight: bold;
+    }
+
+    .autobidder-warning {
+      color: #92400e;
+      font-weight: bold;
+    }
+
+    .autobidder-danger {
+      color: #991b1b;
+      font-weight: bold;
+    }
+  `;
 
   document.documentElement.appendChild(style);
   document.body.appendChild(panel);
 
   autobidderFloatingPanel = panel;
 
-  document
-    .getElementById("autobidder-close-btn")
-    .addEventListener("click", () => {
-      panel.remove();
-    });
+  bindAutobidderPanelEvents();
+  renderActiveProfileSummary();
+}
+
+function setAutobidderPanelMode(mode) {
+  autobidderPanelMode = mode;
+
+  const workMode = document.getElementById("autobidder-work-mode");
+  const settingsMode = document.getElementById("autobidder-settings-mode");
+  const subtitle = document.getElementById("autobidder-panel-subtitle");
+
+  if (!workMode || !settingsMode) return;
+
+  if (mode === "settings") {
+    workMode.classList.add("hidden");
+    settingsMode.classList.remove("hidden");
+
+    if (subtitle) {
+      subtitle.innerText = "Settings";
+    }
+  } else {
+    settingsMode.classList.add("hidden");
+    workMode.classList.remove("hidden");
+
+    if (subtitle) {
+      subtitle.innerText = "Job assistant";
+    }
+  }
+}
+
+function setActiveWorkTab(tabName) {
+  autobidderActiveWorkTab = tabName;
+
+  document.querySelectorAll("[data-work-tab]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.workTab === tabName);
+  });
 
   document
-    .getElementById("autobidder-run-analysis-btn")
-    .addEventListener("click", async () => {
+    .querySelectorAll("#autobidder-work-content .autobidder-tab-panel")
+    .forEach((panel) => {
+      panel.classList.remove("active");
+    });
+
+  const activePanel = document.getElementById(`autobidder-tab-${tabName}`);
+
+  if (activePanel) {
+    activePanel.classList.add("active");
+  }
+}
+
+function setActiveSettingsTab(tabName) {
+  autobidderActiveSettingsTab = tabName;
+
+  document.querySelectorAll("[data-settings-tab]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.settingsTab === tabName);
+  });
+
+  document
+    .querySelectorAll("#autobidder-settings-content .autobidder-tab-panel")
+    .forEach((panel) => {
+      panel.classList.remove("active");
+    });
+
+  const activePanel = document.getElementById(`autobidder-settings-${tabName}`);
+
+  if (activePanel) {
+    activePanel.classList.add("active");
+  }
+}
+
+async function renderActiveProfileSummary() {
+  const box = document.getElementById("autobidder-profile-summary-box");
+
+  if (!box) return;
+
+  try {
+    const active = await getActiveCandidateFromStorage();
+
+    if (!active || !active.candidateId) {
+      box.innerHTML = `
+        <strong>No active candidate selected.</strong><br>
+        Open Settings → Candidate to select one.
+      `;
+      return;
+    }
+
+    let candidate = null;
+
+    if (typeof getJson === "function") {
+      candidate = await getJson(
+        `${AUTOBIDDER_API_BASE_URL}/candidates/${active.candidateId}`,
+      );
+    }
+
+    if (!candidate) {
+      box.innerHTML = `
+        <strong>Active Candidate ID:</strong> ${active.candidateId}<br>
+        <strong>Bidder:</strong> ${active.bidderName || "Not set"}
+      `;
+      return;
+    }
+
+    const name =
+      `${candidate.first_name || ""} ${candidate.last_name || ""}`.trim();
+
+    box.innerHTML = `
+      <strong>${name || "Unnamed Candidate"}</strong><br>
+      Email: ${candidate.email || "-"}<br>
+      Phone: ${candidate.phone || "-"}<br>
+      Location: ${candidate.location || "-"}<br>
+      Work Auth: ${candidate.work_authorization || "-"}<br>
+      Sponsorship: ${candidate.sponsorship_required || "-"}<br>
+      Bidder: ${active.bidderName || "Not set"}<br><br>
+      To change profile/configuration, click the gear icon.
+    `;
+  } catch (error) {
+    box.innerHTML = `
+      Could not load active profile.<br>
+      ${error.message}
+    `;
+  }
+}
+
+function bindAutobidderPanelEvents() {
+  const closeBtn = document.getElementById("autobidder-close-btn");
+  const settingsBtn = document.getElementById("autobidder-settings-btn");
+  const backToWorkBtn = document.getElementById("autobidder-back-to-work-btn");
+  const reportBtn = document.getElementById("autobidder-report-btn");
+
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => {
+      const panel = document.getElementById("autobidder-floating-panel");
+      if (panel) {
+        panel.remove();
+      }
+    });
+  }
+
+  if (settingsBtn) {
+    settingsBtn.addEventListener("click", async () => {
+      setAutobidderPanelMode("settings");
+      setActiveSettingsTab("candidate");
+      bindCandidateSettingsEvents();
+      await loadCandidatesIntoSettings();
+    });
+  }
+
+  if (backToWorkBtn) {
+    backToWorkBtn.addEventListener("click", () => {
+      setAutobidderPanelMode("work");
+      setActiveWorkTab("autofill");
+      renderActiveProfileSummary();
+    });
+  }
+
+  if (reportBtn) {
+    reportBtn.addEventListener("click", async () => {
+      await openAutobidderReport();
+    });
+  }
+
+  document.querySelectorAll("[data-work-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setActiveWorkTab(button.dataset.workTab);
+
+      if (button.dataset.workTab === "profile") {
+        renderActiveProfileSummary();
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-settings-tab]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      setActiveSettingsTab(button.dataset.settingsTab);
+
+      if (button.dataset.settingsTab === "candidate") {
+        bindCandidateSettingsEvents();
+        await loadCandidatesIntoSettings();
+      }
+    });
+  });
+
+  const analyzeBtn = document.getElementById("autobidder-run-analysis-btn");
+  const autofillBtn = document.getElementById("autobidder-autofill-btn");
+  const copyCoverLetterBtn = document.getElementById(
+    "autobidder-copy-cover-letter-btn",
+  );
+  const markSubmittedBtn = document.getElementById(
+    "autobidder-mark-submitted-btn",
+  );
+
+  if (analyzeBtn) {
+    analyzeBtn.addEventListener("click", async () => {
+      setActiveWorkTab("autofill");
       await runAutobidderPageAnalysis();
     });
+  }
 
-  document
-    .getElementById("autobidder-autofill-btn")
-    .addEventListener("click", async () => {
+  if (autofillBtn) {
+    autofillBtn.addEventListener("click", async () => {
+      setActiveWorkTab("autofill");
       await runAutobidderAutofillFromPanel();
     });
-  document
-    .getElementById("autobidder-mark-submitted-btn")
-    .addEventListener("click", async () => {
+  }
+
+  if (copyCoverLetterBtn) {
+    copyCoverLetterBtn.addEventListener("click", async () => {
+      await copyLatestCoverLetterFromPanel();
+    });
+  }
+
+  if (markSubmittedBtn) {
+    markSubmittedBtn.addEventListener("click", async () => {
+      setActiveWorkTab("autofill");
       await runAutobidderMarkSubmittedAndSync();
     });
+  }
+}
 
-  document
-    .getElementById("autobidder-copy-cover-letter-btn")
-    .addEventListener("click", async () => {
-      const resultBox = document.getElementById("autobidder-result-box");
-
-      const storageData = await new Promise((resolve) => {
-        chrome.storage.local.get(["latestOnPageApplicationDraft"], resolve);
-      });
-
-      const draft = storageData.latestOnPageApplicationDraft;
-
-      if (!draft || !draft.cover_letter) {
-        resultBox.innerText = "No cover letter found. Click Analyze Job first.";
-        return;
-      }
-
-      await navigator.clipboard.writeText(draft.cover_letter);
-
-      resultBox.innerText = "Cover letter copied to clipboard.";
+async function openAutobidderReport() {
+  try {
+    const result = await new Promise((resolve) => {
+      chrome.storage.local.get(["googleSheetUrl"], resolve);
     });
+
+    if (result.googleSheetUrl) {
+      window.open(result.googleSheetUrl, "_blank");
+      return;
+    }
+
+    alert(
+      "Google Sheet URL is not configured yet. Go to Settings → Integrations.",
+    );
+  } catch (error) {
+    alert("Could not open report: " + error.message);
+  }
+}
+
+async function copyLatestCoverLetterFromPanel() {
+  const resultBox = document.getElementById("autobidder-result-box");
+
+  try {
+    const storageData = await new Promise((resolve) => {
+      chrome.storage.local.get(["latestOnPageApplicationDraft"], resolve);
+    });
+
+    const draft = storageData.latestOnPageApplicationDraft;
+
+    if (!draft || !draft.cover_letter) {
+      if (resultBox) {
+        resultBox.innerText = "No cover letter found. Run analysis first.";
+      }
+      return;
+    }
+
+    await navigator.clipboard.writeText(draft.cover_letter);
+
+    if (resultBox) {
+      resultBox.innerText = "Cover letter copied to clipboard.";
+    }
+  } catch (error) {
+    if (resultBox) {
+      resultBox.innerText = "Copy cover letter error: " + error.message;
+    }
+  }
 }
 
 function getPanelElement(id) {
@@ -1028,11 +1549,39 @@ async function runAutobidderPageAnalysis() {
     </div>
   </div>
 `;
+    setPanelStep("Checking existing application history...");
 
-    const applicationDraft = await postJson(
-      `${AUTOBIDDER_API_BASE_URL}/applications`,
-      applicationPayload,
-    );
+    let existingApplication = null;
+
+    try {
+      const existingPath = `/applications/find-existing?candidate_id=${Number(active.candidateId)}&original_job_url=${encodeURIComponent(window.location.href)}`;
+
+      existingApplication = await getJson(
+        `${AUTOBIDDER_API_BASE_URL}${existingPath}`,
+      );
+    } catch (error) {
+      existingApplication = null;
+    }
+
+    let applicationDraft;
+
+    if (existingApplication && existingApplication.id) {
+      applicationDraft = existingApplication;
+      addPanelLog(
+        `Existing application loaded: #${applicationDraft.id}`,
+        "success",
+      );
+    } else {
+      setPanelStep("Creating application draft...");
+      addPanelLog("Generating match score and cover letter", "loading");
+
+      applicationDraft = await postJson(
+        `${AUTOBIDDER_API_BASE_URL}/applications`,
+        applicationPayload,
+      );
+
+      addPanelLog("Application draft created", "success");
+    }
 
     addPanelLog("Application draft created", "success");
 
@@ -1081,6 +1630,8 @@ async function runAutobidderPageAnalysis() {
       applicationDraft,
       matchAnalysis,
     );
+
+    renderMatchScoreTab(applicationDraft, matchAnalysis);
 
     const screeningPreview = screeningAnswerResult.answers.length
       ? screeningAnswerResult.answers
@@ -2399,7 +2950,7 @@ async function runAutobidderMarkSubmittedAndSync() {
 
     setPanelStep("Updating application status...");
 
-    const updatedApplication = await postJson(
+    const updatedApplication = await patchJson(
       `${AUTOBIDDER_API_BASE_URL}/applications/${draft.id}/status`,
       {
         status: "Submitted",
@@ -2462,6 +3013,26 @@ async function getJson(pathOrUrl) {
 
   if (!response || !response.success) {
     throw new Error(response?.message || "Backend GET request failed.");
+  }
+
+  return response.data;
+}
+
+async function patchJson(pathOrUrl, payload) {
+  let path = pathOrUrl;
+
+  if (pathOrUrl.startsWith(AUTOBIDDER_API_BASE_URL)) {
+    path = pathOrUrl.replace(AUTOBIDDER_API_BASE_URL, "");
+  }
+
+  const response = await chrome.runtime.sendMessage({
+    type: "BACKEND_PATCH_JSON",
+    path,
+    payload,
+  });
+
+  if (!response || !response.success) {
+    throw new Error(response?.message || "Backend PATCH request failed.");
   }
 
   return response.data;
@@ -2672,4 +3243,267 @@ function updateJobInfoWithMatchScore(
       </div>
     </div>
   `;
+}
+
+function renderMatchScoreTab(applicationDraft, matchAnalysis) {
+  const box = document.getElementById("autobidder-match-summary-box");
+
+  if (!box) return;
+
+  if (!applicationDraft) {
+    box.innerHTML = "Run analysis to see structured match details.";
+    return;
+  }
+
+  const score = applicationDraft.match_score ?? 0;
+  const recommendation = matchAnalysis?.recommendation || getScoreLabel(score);
+
+  const requiredSkills = matchAnalysis?.required_skills?.join(", ") || "-";
+  const preferredSkills = matchAnalysis?.preferred_skills?.join(", ") || "-";
+  const matchedSkills = matchAnalysis?.matched_skills?.join(", ") || "-";
+  const missingRequired =
+    matchAnalysis?.missing_required_skills?.join(", ") || "-";
+  const missingPreferred =
+    matchAnalysis?.missing_preferred_skills?.join(", ") || "-";
+  const riskFlags = matchAnalysis?.risk_flags?.join(", ") || "-";
+  const strengths = matchAnalysis?.strengths?.join(", ") || "-";
+
+  box.innerHTML = `
+    <strong>Overall Match:</strong> ${score}%<br>
+    <strong>Recommendation:</strong> ${recommendation}<br><br>
+
+    <strong>Breakdown</strong><br>
+    Required Skills: ${matchAnalysis?.required_skills_score ?? "-"}<br>
+    Preferred Skills: ${matchAnalysis?.preferred_skills_score ?? "-"}<br>
+    Industry: ${matchAnalysis?.industry_score ?? "-"}<br>
+    Seniority: ${matchAnalysis?.seniority_score ?? "-"}<br>
+    Location: ${matchAnalysis?.location_score ?? "-"}<br><br>
+
+    <strong>Required Skills</strong><br>
+    ${requiredSkills}<br><br>
+
+    <strong>Preferred Skills</strong><br>
+    ${preferredSkills}<br><br>
+
+    <strong>Matched Skills</strong><br>
+    ${matchedSkills}<br><br>
+
+    <strong>Missing Required</strong><br>
+    ${missingRequired}<br><br>
+
+    <strong>Missing Preferred</strong><br>
+    ${missingPreferred}<br><br>
+
+    <strong>Strengths</strong><br>
+    ${strengths}<br><br>
+
+    <strong>Risk Flags</strong><br>
+    ${riskFlags}<br><br>
+
+    <strong>Summary</strong><br>
+    ${matchAnalysis?.summary || "No summary available."}
+  `;
+}
+
+async function loadCandidatesIntoSettings() {
+  const select = document.getElementById(
+    "autobidder-settings-candidate-select",
+  );
+  const searchInput = document.getElementById(
+    "autobidder-settings-candidate-search",
+  );
+  const bidderInput = document.getElementById(
+    "autobidder-settings-bidder-name",
+  );
+
+  if (!select) return;
+
+  try {
+    const storageData = await new Promise((resolve) => {
+      chrome.storage.local.get(
+        ["activeCandidateId", "activeBidderName"],
+        resolve,
+      );
+    });
+
+    if (bidderInput) {
+      bidderInput.value = storageData.activeBidderName || "";
+    }
+
+    const candidates = await getJson(`${AUTOBIDDER_API_BASE_URL}/candidates`);
+    autobidderCandidatesCache = candidates || [];
+
+    renderCandidateSelectOptions(autobidderCandidatesCache);
+
+    if (storageData.activeCandidateId) {
+      select.value = String(storageData.activeCandidateId);
+      renderSettingsCandidatePreview(Number(storageData.activeCandidateId));
+    }
+
+    if (searchInput && !searchInput.dataset.bound) {
+      searchInput.dataset.bound = "true";
+      searchInput.addEventListener("input", () => {
+        const query = searchInput.value.toLowerCase().trim();
+
+        const filtered = autobidderCandidatesCache.filter((candidate) => {
+          const text = [
+            candidate.id,
+            candidate.first_name,
+            candidate.last_name,
+            candidate.email,
+            candidate.phone,
+            candidate.location,
+            candidate.work_authorization,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+
+          return text.includes(query);
+        });
+
+        renderCandidateSelectOptions(filtered);
+      });
+    }
+
+    if (!select.dataset.bound) {
+      select.dataset.bound = "true";
+      select.addEventListener("change", () => {
+        renderSettingsCandidatePreview(Number(select.value));
+      });
+    }
+  } catch (error) {
+    select.innerHTML = `<option value="">Could not load candidates</option>`;
+
+    const preview = document.getElementById(
+      "autobidder-settings-candidate-preview",
+    );
+    if (preview) {
+      preview.innerText = "Candidate load error: " + error.message;
+    }
+  }
+}
+
+function renderCandidateSelectOptions(candidates) {
+  const select = document.getElementById(
+    "autobidder-settings-candidate-select",
+  );
+
+  if (!select) return;
+
+  select.innerHTML = "";
+
+  if (!candidates || candidates.length === 0) {
+    select.innerHTML = `<option value="">No candidates found</option>`;
+    return;
+  }
+
+  const emptyOption = document.createElement("option");
+  emptyOption.value = "";
+  emptyOption.textContent = "Select a candidate";
+  select.appendChild(emptyOption);
+
+  candidates.forEach((candidate) => {
+    const option = document.createElement("option");
+    option.value = candidate.id;
+
+    const name =
+      `${candidate.first_name || ""} ${candidate.last_name || ""}`.trim();
+    const email = candidate.email ? ` - ${candidate.email}` : "";
+    const location = candidate.location ? ` - ${candidate.location}` : "";
+
+    option.textContent = `#${candidate.id} - ${name}${email}${location}`;
+
+    select.appendChild(option);
+  });
+}
+
+function renderSettingsCandidatePreview(candidateId) {
+  const preview = document.getElementById(
+    "autobidder-settings-candidate-preview",
+  );
+
+  if (!preview) return;
+
+  if (!candidateId) {
+    preview.innerHTML = "No candidate selected.";
+    return;
+  }
+
+  const candidate = autobidderCandidatesCache.find(
+    (item) => Number(item.id) === Number(candidateId),
+  );
+
+  if (!candidate) {
+    preview.innerHTML = "Candidate not found in loaded list.";
+    return;
+  }
+
+  const name =
+    `${candidate.first_name || ""} ${candidate.last_name || ""}`.trim();
+
+  preview.innerHTML = `
+    <strong>${name || "Unnamed Candidate"}</strong><br>
+    Email: ${candidate.email || "-"}<br>
+    Phone: ${candidate.phone || "-"}<br>
+    Location: ${candidate.location || "-"}<br>
+    Work Auth: ${candidate.work_authorization || "-"}<br>
+    Sponsorship: ${candidate.sponsorship_required || "-"}
+  `;
+}
+
+function bindCandidateSettingsEvents() {
+  const setActiveBtn = document.getElementById(
+    "autobidder-set-active-candidate-btn",
+  );
+
+  if (!setActiveBtn || setActiveBtn.dataset.bound) return;
+
+  setActiveBtn.dataset.bound = "true";
+
+  setActiveBtn.addEventListener("click", async () => {
+    const select = document.getElementById(
+      "autobidder-settings-candidate-select",
+    );
+    const bidderInput = document.getElementById(
+      "autobidder-settings-bidder-name",
+    );
+
+    const candidateId = select ? Number(select.value) : null;
+    const bidderName = bidderInput ? bidderInput.value.trim() : "";
+
+    if (!candidateId) {
+      alert("Please select a candidate.");
+      return;
+    }
+
+    if (!bidderName) {
+      alert("Please enter bidder name.");
+      return;
+    }
+
+    await chrome.storage.local.set({
+      activeCandidateId: candidateId,
+      activeBidderName: bidderName,
+    });
+
+    const candidate = autobidderCandidatesCache.find(
+      (item) => Number(item.id) === Number(candidateId),
+    );
+    const candidateName = candidate
+      ? `${candidate.first_name || ""} ${candidate.last_name || ""}`.trim()
+      : `#${candidateId}`;
+
+    const preview = document.getElementById(
+      "autobidder-settings-candidate-preview",
+    );
+
+    if (preview) {
+      preview.innerHTML += `<br><br><strong style="color:#166534;">Active candidate saved: ${candidateName}</strong>`;
+    }
+
+    await renderActiveProfileSummary();
+
+    autobidderAutoAnalysisStarted = false;
+  });
 }

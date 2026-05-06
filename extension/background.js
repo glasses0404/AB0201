@@ -17,6 +17,23 @@ async function postJsonToBackend(path, payload) {
   return await response.json();
 }
 
+async function patchJsonToBackend(path, payload) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload || {}),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
+
+  return await response.json();
+}
+
 async function getJsonFromBackend(path) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: "GET",
@@ -51,6 +68,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.type === "BACKEND_GET_JSON") {
     getJsonFromBackend(request.path)
+      .then((data) => {
+        sendResponse({
+          success: true,
+          data,
+        });
+      })
+      .catch((error) => {
+        sendResponse({
+          success: false,
+          message: error.message,
+        });
+      });
+
+    return true;
+  }
+
+  if (request.type === "BACKEND_PATCH_JSON") {
+    patchJsonToBackend(request.path, request.payload)
       .then((data) => {
         sendResponse({
           success: true,
