@@ -123,8 +123,25 @@ function createAutobidderFloatingPanel() {
 
           <div id="autobidder-settings-resume" class="autobidder-tab-panel">
             <div class="autobidder-section-title">Resume</div>
+
             <div class="autobidder-card">
-              Resume upload and saved resume status will move here.
+              <div id="autobidder-resume-active-candidate">
+                Select an active candidate first.
+              </div>
+
+              <label class="autobidder-label">Resume File</label>
+              <input
+                id="autobidder-settings-resume-file"
+                class="autobidder-input"
+                type="file"
+                accept=".pdf,.doc,.docx,.txt"
+              />
+
+              <button id="autobidder-save-resume-btn">Save Resume for Candidate</button>
+
+              <div id="autobidder-resume-preview" class="autobidder-mini-preview">
+                No saved resume loaded.
+              </div>
             </div>
           </div>
 
@@ -173,6 +190,10 @@ function createAutobidderFloatingPanel() {
       z-index: 2147483647;
       font-family: Arial, sans-serif;
       font-size: 13px;
+    }
+    input.autobidder-input[type="file"] {
+      padding: 7px;
+      background: #ffffff;
     }
 
     #autobidder-tab-autofill {
@@ -808,6 +829,11 @@ function bindAutobidderPanelEvents() {
       if (button.dataset.settingsTab === "candidate") {
         bindCandidateSettingsEvents();
         await loadCandidatesIntoSettings();
+      }
+
+      if (button.dataset.settingsTab === "resume") {
+        bindResumeSettingsEvents();
+        await renderResumeSettings();
       }
     });
   });
@@ -3505,5 +3531,199 @@ function bindCandidateSettingsEvents() {
     await renderActiveProfileSummary();
 
     autobidderAutoAnalysisStarted = false;
+
+    await renderResumeSettings();
+  });
+}
+
+function arrayBufferToBase64(buffer) {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+
+  return btoa(binary);
+}
+
+function getResumeStorageKey(candidateId) {
+  return `resume_file_candidate_${candidateId}`;
+}
+
+async function saveResumeFileForCandidateInPanel(candidateId, file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const base64Data = arrayBufferToBase64(arrayBuffer);
+
+  const resumeData = {
+    fileName: file.name,
+    fileType: file.type || "application/octet-stream",
+    fileSize: file.size,
+    base64Data,
+  };
+
+  const key = getResumeStorageKey(candidateId);
+
+  await chrome.storage.local.set({
+    [key]: resumeData,
+  });
+
+  return resumeData;
+}
+
+async function getSavedResumeFileForCandidateFromStorage(candidateId) {
+  const key = getResumeStorageKey(candidateId);
+
+  return new Promise((resolve) => {
+    chrome.storage.local.get([key], (result) => {
+      resolve(result[key] || null);
+    });
+  });
+}
+
+function formatResumeSize(sizeBytes) {
+  if (!sizeBytes) return "-";
+
+  const kb = Math.round(sizeBytes / 1024);
+
+  if (kb < 1024) {
+    return `${kb} KB`;
+  }
+
+  return `${(kb / 1024).toFixed(1)} MB`;
+}
+
+async function renderResumeSettings() {
+  const activeCandidateBox = document.getElementById(
+    "autobidder-resume-active-candidate",
+  );
+  const preview = document.getElementById("autobidder-resume-preview");
+
+  if (!activeCandidateBox || !preview) return;
+
+  try {
+    const active = await getActiveCandidateFromStorage();
+
+    if (!active || !active.candidateId) {
+      activeCandidateBox.innerHTML = `
+        <strong>No active candidate selected.</strong><br>
+        Go to Settings → Candidate and set an active candidate first.
+      `;
+      preview.innerHTML = "No saved resume loaded.";
+      return;
+    }
+
+    let candidateName = `Candidate #${active.candidateId}`;
+
+    const candidate = await getJson(
+      `${AUTOBIDDER_API_BASE_URL}/candidates/${active.candidateId}`,
+    );
+
+    if (candidate) {
+      candidateName =
+        `${candidate.first_name || ""} ${candidate.last_name || ""}`.trim() ||
+        candidateName;
+    }
+
+    activeCandidateBox.innerHTML = `
+      <strong>Active Candidate:</strong> ${candidateName}<br>
+      <strong>Candidate ID:</strong> ${active.candidateId}
+    `;
+
+    const resumeData = await getSavedResumeFileForCandidateFromStorage(
+      active.candidateId,
+    );
+
+    if (!resumeData) {
+      preview.innerHTML = `
+        <strong>No saved resume for this candidate.</strong><br>
+        Choose a file and click Save Resume.
+      `;
+      return;
+    }
+
+    preview.innerHTML = `
+      <strong>Saved Resume</strong><br>
+      File: ${resumeData.fileName}<br>
+      Type: ${resumeData.fileType || "Unknown"}<br>
+      Size: ${formatResumeSize(resumeData.fileSize)}
+    `;
+  } catch (error) {
+    preview.innerHTML = `Resume settings error: ${error.message}`;
+  }
+}
+
+function bindResumeSettingsEvents() {
+  const saveBtn = document.getElementById("autobidder-save-resume-btn");
+
+  if (!saveBtn || saveBtn.dataset.bound) return;
+
+  saveBtn.dataset.bound = "true";
+
+  saveBtn.addEventListener("click", async () => {
+    const fileInput = document.getElementById(
+      "autobidder-settings-resume-file",
+    );
+    const preview = document.getElementById("autobidder-resume-preview");
+
+    try {
+      const active = await getActiveCandidateFromStorage();
+
+      if (!active || !active.candidateId) {
+        alert("Please set an active candidate first.");
+        return;
+      }
+
+      const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+
+      if (!file) {
+        alert("Please choose a resume file first.");
+        return;
+      }
+
+      const allowedExtensions = [".pdf", ".doc", ".docx", ".txt"];
+      const lowerFileName = file.name.toLowerCase();
+
+      const isAllowed = allowedExtensions.some((ext) =>
+        lowerFileName.endsWith(ext),
+      );
+
+      if (!isAllowed) {
+        alert("Only PDF, DOC, DOCX, and TXT files are allowed.");
+        return;
+      }
+
+      const maxSizeMb = 8;
+      const maxSizeBytes = maxSizeMb * 1024 * 1024;
+
+      if (file.size > maxSizeBytes) {
+        alert(`Resume file is too large. Max size is ${maxSizeMb} MB.`);
+        return;
+      }
+
+      if (preview) {
+        preview.innerHTML = "Saving resume...";
+      }
+
+      const resumeData = await saveResumeFileForCandidateInPanel(
+        active.candidateId,
+        file,
+      );
+
+      if (preview) {
+        preview.innerHTML = `
+          <strong style="color:#166534;">Resume saved successfully.</strong><br>
+          File: ${resumeData.fileName}<br>
+          Type: ${resumeData.fileType || "Unknown"}<br>
+          Size: ${formatResumeSize(resumeData.fileSize)}
+        `;
+      }
+
+      fileInput.value = "";
+    } catch (error) {
+      if (preview) {
+        preview.innerHTML = `<strong style="color:#991b1b;">Resume save error:</strong><br>${error.message}`;
+      }
+    }
   });
 }
