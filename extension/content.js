@@ -151,8 +151,63 @@ function createAutobidderFloatingPanel() {
 
               <button id="autobidder-set-active-candidate-btn">Set Active Candidate</button>
             </div>
-          </div>
 
+            <div class="autobidder-card">
+              <div class="autobidder-section-title">Edit Candidate Information</div>
+
+              <div class="autobidder-two-col">
+                <div>
+                  <label class="autobidder-label">First Name</label>
+                  <input id="autobidder-edit-first-name" class="autobidder-input" />
+                </div>
+
+                <div>
+                  <label class="autobidder-label">Last Name</label>
+                  <input id="autobidder-edit-last-name" class="autobidder-input" />
+                </div>
+              </div>
+
+              <label class="autobidder-label">Email</label>
+              <input id="autobidder-edit-email" class="autobidder-input" />
+
+              <label class="autobidder-label">Phone</label>
+              <input id="autobidder-edit-phone" class="autobidder-input" />
+
+              <label class="autobidder-label">Location</label>
+              <input id="autobidder-edit-location" class="autobidder-input" />
+
+              <label class="autobidder-label">LinkedIn</label>
+              <input id="autobidder-edit-linkedin" class="autobidder-input" />
+
+              <label class="autobidder-label">GitHub</label>
+              <input id="autobidder-edit-github" class="autobidder-input" />
+
+              <label class="autobidder-label">Portfolio</label>
+              <input id="autobidder-edit-portfolio" class="autobidder-input" />
+
+              <label class="autobidder-label">Work Authorization</label>
+              <input id="autobidder-edit-work-authorization" class="autobidder-input" placeholder="Example: US Citizen" />
+
+              <label class="autobidder-label">Sponsorship Required</label>
+              <select id="autobidder-edit-sponsorship-required" class="autobidder-input">
+                <option value="">Not specified</option>
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+              </select>
+
+              <label class="autobidder-label">Expected Salary</label>
+              <input id="autobidder-edit-expected-salary" class="autobidder-input" placeholder="Example: 130k" />
+
+              <label class="autobidder-label">Resume Text</label>
+              <textarea id="autobidder-edit-resume-text" class="autobidder-input autobidder-textarea-large" placeholder="Candidate resume text"></textarea>
+
+              <button id="autobidder-save-candidate-changes-btn">Save Candidate Changes</button>
+
+              <div id="autobidder-edit-candidate-status" class="autobidder-mini-preview">
+                Select a candidate to edit.
+              </div>
+            </div>
+          </div>
           <div id="autobidder-settings-resume" class="autobidder-tab-panel">
             <div class="autobidder-section-title">Resume</div>
 
@@ -347,6 +402,25 @@ function createAutobidderFloatingPanel() {
       font-family: Arial, sans-serif;
       font-size: 13px;
     }
+      
+    #autobidder-floating-panel *::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    #autobidder-floating-panel *::-webkit-scrollbar-track {
+      background: #f1f5f9;
+      border-radius: 8px;
+    }
+
+    #autobidder-floating-panel *::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 8px;
+    }
+
+    #autobidder-floating-panel *::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
     input.autobidder-input[type="file"] {
       padding: 7px;
       background: #ffffff;
@@ -513,7 +587,7 @@ function createAutobidderFloatingPanel() {
 
     #autobidder-panel-body {
       padding: 12px;
-      height: calc(100% - 58px);
+      height: calc(100% - 52px);
       overflow: hidden;
       box-sizing: border-box;
     }
@@ -526,16 +600,58 @@ function createAutobidderFloatingPanel() {
     #autobidder-settings-mode {
       height: 100%;
       overflow: hidden;
+      display: flex;
+      flex-direction: column;
     }
+    #autobidder-settings-header-row {
+      flex-shrink: 0;
+    }
+
+    #autobidder-settings-tabs {
+      flex-shrink: 0;
+    }  
 
     #autobidder-work-content,
     #autobidder-settings-content {
-      height: calc(100% - 48px);
+      flex: 1;
+      min-height: 0;
       overflow: hidden;
     }
 
     .autobidder-tab-panel {
       display: none;
+      height: 100%;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding-right: 4px;
+      box-sizing: border-box;
+    }
+
+    #autobidder-settings-candidate,
+    #autobidder-settings-resume,
+    #autobidder-settings-answers,
+    #autobidder-settings-integrations,
+    #autobidder-settings-preferences {
+      padding-bottom: 22px;
+    }
+
+    .autobidder-tab-panel.active {
+      display: block;
+    }
+
+    .autobidder-two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .autobidder-textarea-large {
+      min-height: 110px;
+      max-height: 180px;
+      resize: vertical;
+      font-family: Arial, sans-serif;
+      line-height: 1.4;
     }
 
     .autobidder-tab-panel.active {
@@ -3708,6 +3824,14 @@ async function loadCandidatesIntoSettings() {
       renderSettingsCandidatePreview(Number(storageData.activeCandidateId));
     }
 
+    const activeCandidate = autobidderCandidatesCache.find(
+      (item) => Number(item.id) === Number(storageData.activeCandidateId),
+    );
+
+    if (activeCandidate) {
+      fillCandidateEditForm(activeCandidate);
+    }
+
     if (searchInput && !searchInput.dataset.bound) {
       searchInput.dataset.bound = "true";
       searchInput.addEventListener("input", () => {
@@ -3737,7 +3861,14 @@ async function loadCandidatesIntoSettings() {
     if (!select.dataset.bound) {
       select.dataset.bound = "true";
       select.addEventListener("change", () => {
-        renderSettingsCandidatePreview(Number(select.value));
+        const candidateId = Number(select.value);
+        renderSettingsCandidatePreview(candidateId);
+
+        const candidate = autobidderCandidatesCache.find(
+          (item) => Number(item.id) === Number(candidateId),
+        );
+
+        fillCandidateEditForm(candidate);
       });
     }
   } catch (error) {
@@ -3825,7 +3956,15 @@ function bindCandidateSettingsEvents() {
     "autobidder-set-active-candidate-btn",
   );
 
-  if (!setActiveBtn || setActiveBtn.dataset.bound) return;
+  if (!setActiveBtn) {
+    bindCandidateEditEvents();
+    return;
+  }
+
+  if (setActiveBtn.dataset.bound) {
+    bindCandidateEditEvents();
+    return;
+  }
 
   setActiveBtn.dataset.bound = "true";
 
@@ -3877,6 +4016,8 @@ function bindCandidateSettingsEvents() {
     await renderResumeSettings();
     await loadSavedAnswersSettings();
   });
+
+  bindCandidateEditEvents();
 }
 
 function arrayBufferToBase64(buffer) {
@@ -4726,4 +4867,167 @@ function setWorkTabDisabled(tabName, disabled) {
 
   button.disabled = disabled;
   button.classList.toggle("disabled", disabled);
+}
+
+function setEditCandidateStatus(message, type = "info") {
+  const statusBox = document.getElementById("autobidder-edit-candidate-status");
+
+  if (!statusBox) return;
+
+  const colorMap = {
+    info: "#374151",
+    success: "#166534",
+    error: "#991b1b",
+    warning: "#92400e",
+  };
+
+  statusBox.innerHTML = `<span style="color:${colorMap[type] || "#374151"};">${message}</span>`;
+}
+
+function getSelectedCandidateFromSettings() {
+  const select = document.getElementById(
+    "autobidder-settings-candidate-select",
+  );
+
+  if (!select || !select.value) {
+    return null;
+  }
+
+  const candidateId = Number(select.value);
+
+  return (
+    autobidderCandidatesCache.find(
+      (candidate) => Number(candidate.id) === candidateId,
+    ) || null
+  );
+}
+
+function fillCandidateEditForm(candidate) {
+  const fields = {
+    "autobidder-edit-first-name": candidate?.first_name || "",
+    "autobidder-edit-last-name": candidate?.last_name || "",
+    "autobidder-edit-email": candidate?.email || "",
+    "autobidder-edit-phone": candidate?.phone || "",
+    "autobidder-edit-location": candidate?.location || "",
+    "autobidder-edit-linkedin": candidate?.linkedin || "",
+    "autobidder-edit-github": candidate?.github || "",
+    "autobidder-edit-portfolio": candidate?.portfolio || "",
+    "autobidder-edit-work-authorization": candidate?.work_authorization || "",
+    "autobidder-edit-sponsorship-required":
+      candidate?.sponsorship_required || "",
+    "autobidder-edit-expected-salary": candidate?.expected_salary || "",
+    "autobidder-edit-resume-text": candidate?.resume_text || "",
+  };
+
+  Object.entries(fields).forEach(([id, value]) => {
+    const el = document.getElementById(id);
+
+    if (el) {
+      el.value = value;
+    }
+  });
+
+  if (candidate) {
+    setEditCandidateStatus(`Editing candidate #${candidate.id}.`, "info");
+  } else {
+    setEditCandidateStatus("Select a candidate to edit.", "warning");
+  }
+}
+
+function buildCandidateUpdatePayloadFromPanel() {
+  const getValue = (id) => {
+    const el = document.getElementById(id);
+    return el ? el.value.trim() : "";
+  };
+
+  return {
+    first_name: getValue("autobidder-edit-first-name"),
+    last_name: getValue("autobidder-edit-last-name"),
+    email: getValue("autobidder-edit-email") || null,
+    phone: getValue("autobidder-edit-phone") || null,
+    location: getValue("autobidder-edit-location") || null,
+    linkedin: getValue("autobidder-edit-linkedin") || null,
+    github: getValue("autobidder-edit-github") || null,
+    portfolio: getValue("autobidder-edit-portfolio") || null,
+    work_authorization: getValue("autobidder-edit-work-authorization") || null,
+    sponsorship_required:
+      getValue("autobidder-edit-sponsorship-required") || null,
+    expected_salary: getValue("autobidder-edit-expected-salary") || null,
+    resume_text: getValue("autobidder-edit-resume-text") || null,
+  };
+}
+
+async function updateCandidateFromPanel(candidateId, payload) {
+  return await patchJson(
+    `${AUTOBIDDER_API_BASE_URL}/candidates/${candidateId}`,
+    payload,
+  );
+}
+
+function bindCandidateEditEvents() {
+  const saveBtn = document.getElementById(
+    "autobidder-save-candidate-changes-btn",
+  );
+
+  if (!saveBtn || saveBtn.dataset.bound) return;
+
+  saveBtn.dataset.bound = "true";
+
+  saveBtn.addEventListener("click", async () => {
+    try {
+      const candidate = getSelectedCandidateFromSettings();
+
+      if (!candidate) {
+        setEditCandidateStatus("Please select a candidate first.", "error");
+        return;
+      }
+
+      const payload = buildCandidateUpdatePayloadFromPanel();
+
+      if (!payload.first_name || !payload.last_name) {
+        setEditCandidateStatus(
+          "First name and last name are required.",
+          "error",
+        );
+        return;
+      }
+
+      setEditCandidateStatus("Saving candidate changes...", "warning");
+
+      const updatedCandidate = await updateCandidateFromPanel(
+        candidate.id,
+        payload,
+      );
+
+      const index = autobidderCandidatesCache.findIndex(
+        (item) => Number(item.id) === Number(updatedCandidate.id),
+      );
+
+      if (index !== -1) {
+        autobidderCandidatesCache[index] = updatedCandidate;
+      }
+
+      renderCandidateSelectOptions(autobidderCandidatesCache);
+
+      const select = document.getElementById(
+        "autobidder-settings-candidate-select",
+      );
+
+      if (select) {
+        select.value = String(updatedCandidate.id);
+      }
+
+      renderSettingsCandidatePreview(updatedCandidate.id);
+      fillCandidateEditForm(updatedCandidate);
+
+      await renderActiveProfileSummary();
+
+      setEditCandidateStatus(
+        `Candidate #${updatedCandidate.id} updated successfully.`,
+        "success",
+      );
+    } catch (error) {
+      setEditCandidateStatus(`Save candidate error: ${error.message}`, "error");
+    }
+  });
 }

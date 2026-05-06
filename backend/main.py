@@ -18,6 +18,7 @@ from schemas import (
     ApplicationResponse,
     JobExtractRequest,
     JobExtractResponse,
+    CandidateUpdate,
     ApplicationStatusUpdate,
     ApplicationStatusOverrideUpdate,
     GoogleSheetsSyncLogResponse,
@@ -85,6 +86,27 @@ def create_candidate(candidate: CandidateCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_candidate)
     return new_candidate
+
+@app.patch("/candidates/{candidate_id}", response_model=CandidateResponse)
+def update_candidate(
+    candidate_id: int,
+    candidate_req: CandidateUpdate,
+    db: Session = Depends(get_db)
+):
+    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    update_data = candidate_req.model_dump(exclude_unset=True)
+
+    for field, value in update_data.items():
+        setattr(candidate, field, value)
+
+    db.commit()
+    db.refresh(candidate)
+
+    return candidate
 
 @app.post("/candidates/{candidate_id}/answers", response_model=CandidateAnswerResponse)
 def create_candidate_answer(

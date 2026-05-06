@@ -20,6 +20,19 @@ class CandidateCreate(BaseModel):
 
     resume_text: Optional[str] = None
 
+class CandidateUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    location: Optional[str] = None
+    linkedin: Optional[str] = None
+    github: Optional[str] = None
+    portfolio: Optional[str] = None
+    work_authorization: Optional[str] = None
+    sponsorship_required: Optional[str] = None
+    expected_salary: Optional[str] = None
+    resume_text: Optional[str] = None
 
 class CandidateResponse(CandidateCreate):
     id: int
