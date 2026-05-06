@@ -402,7 +402,7 @@ function createAutobidderFloatingPanel() {
       font-family: Arial, sans-serif;
       font-size: 13px;
     }
-      
+
     #autobidder-floating-panel *::-webkit-scrollbar {
       width: 8px;
     }
@@ -1616,18 +1616,20 @@ function setMatchingCheckbox(fieldId, answerText) {
   return true;
 }
 
-function fillScreeningAnswers(answers) {
+async function fillScreeningAnswers(answers) {
   const filled = [];
   const skipped = [];
 
-  answers.forEach((answer) => {
-    if (answer.manual_review_required) {
+  for (const answer of answers) {
+    const isGreenhouseDropdown = answer.fieldType === "custom_select";
+
+    if (answer.manual_review_required && !isGreenhouseDropdown) {
       skipped.push({
         fieldId: answer.fieldId,
         question: answer.question,
         reason: "Manual review required",
       });
-      return;
+      continue;
     }
 
     if (answer.fieldType === "radio") {
@@ -1647,7 +1649,7 @@ function fillScreeningAnswers(answers) {
         });
       }
 
-      return;
+      continue;
     }
 
     if (answer.fieldType === "checkbox") {
@@ -1667,7 +1669,34 @@ function fillScreeningAnswers(answers) {
         });
       }
 
-      return;
+      continue;
+    }
+
+    if (answer.fieldType === "custom_select") {
+      if (!answer.answer && window.autobidderLatestCandidateProfile) {
+        answer.answer = getGreenhouseQuestionAnswerFallback(
+          answer.question,
+          window.autobidderLatestCandidateProfile,
+        );
+      }
+
+      const selected = await clickGreenhouseCustomSelectOption(answer);
+
+      if (selected) {
+        filled.push({
+          fieldId: answer.fieldId,
+          question: answer.question,
+          value: answer.selected_option_label || answer.answer,
+        });
+      } else {
+        skipped.push({
+          fieldId: answer.fieldId,
+          question: answer.question,
+          reason: "No matching custom dropdown option",
+        });
+      }
+
+      continue;
     }
 
     const field = document.querySelector(
@@ -1680,7 +1709,16 @@ function fillScreeningAnswers(answers) {
         question: answer.question,
         reason: "Field not found",
       });
-      return;
+      continue;
+    }
+
+    if (isProtectedProfileFieldElement(field)) {
+      skipped.push({
+        fieldId: answer.fieldId,
+        question: answer.question,
+        reason: "Protected profile field skipped",
+      });
+      continue;
     }
 
     const tag = field.tagName.toLowerCase();
@@ -1702,7 +1740,7 @@ function fillScreeningAnswers(answers) {
         });
       }
 
-      return;
+      continue;
     }
 
     if (tag === "textarea" || tag === "input") {
@@ -1714,7 +1752,7 @@ function fillScreeningAnswers(answers) {
         value: answer.answer,
       });
 
-      return;
+      continue;
     }
 
     skipped.push({
@@ -1722,7 +1760,7 @@ function fillScreeningAnswers(answers) {
       question: answer.question,
       reason: "Unsupported field type",
     });
-  });
+  }
 
   return {
     success: true,
@@ -2437,71 +2475,222 @@ function detectChoiceFields() {
   return fields;
 }
 
+function getGreenhouseQuestionContainers() {
+  return Array.from(
+    document.querySelectorAll(
+      ".field, .custom-question, .application-question, [data-mapped='true'], div",
+    ),
+  ).filter((container) => {
+    const text = container.innerText?.replace(/\s+/g, " ").trim() || "";
+
+    if (!text || text.length < 5 || text.length > 900) return false;
+
+    const hasInput = container.querySelector(
+      "textarea, input[type='text'], input[type='number'], select, button, [role='button'], [role='combobox']",
+    );
+
+    if (!hasInput) return false;
+
+    const lower = text.toLowerCase();
+
+    return (
+      lower.includes("?") ||
+      lower.includes("eligible to work") ||
+      lower.includes("authorized") ||
+      lower.includes("sponsorship") ||
+      lower.includes("sponsor") ||
+      lower.includes("visa") ||
+      lower.includes("salary") ||
+      lower.includes("relocate") ||
+      lower.includes("hybrid") ||
+      lower.includes("remote") ||
+      lower.includes("linkedin") ||
+      lower.includes("website") ||
+      lower.includes("experience") ||
+      lower.includes("years")
+    );
+  });
+}
+
+function getGreenhouseDropdownOptionsFromContainer(container) {
+  const options = [];
+
+  const optionNodes = Array.from(
+    container.querySelectorAll("option, [role='option'], li, button"),
+  );
+
+  optionNodes.forEach((node, index) => {
+    const label =
+      node.innerText?.replace(/\s+/g, " ").trim() || node.value || "";
+
+    if (!label) return;
+
+    const lower = label.toLowerCase();
+
+    if (
+      lower === "select..." ||
+      lower === "select" ||
+      lower === "attach" ||
+      lower === "dropbox" ||
+      lower === "google drive" ||
+      lower.includes("upload resume") ||
+      lower.includes("attach resume")
+    ) {
+      return;
+    }
+
+    options.push(makeOptionObject(label, node.value || label, index));
+  });
+
+  const unique = [];
+  const seen = new Set();
+
+  options.forEach((option) => {
+    const key = `${option.label}-${option.value}`.toLowerCase();
+
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(option);
+    }
+  });
+
+  return unique;
+}
+
 function detectGreenhouseScreeningFields() {
   const fields = [];
+  const seenInputs = new Set();
 
   const containers = Array.from(
     document.querySelectorAll(
-      ".field, .custom-question, .application-question, div",
+      ".field, .custom-question, .application-question, fieldset, li, div",
     ),
   );
 
   containers.forEach((container, index) => {
-    const input = container.querySelector(
+    const containerText = (container.innerText || "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!containerText) return;
+    if (containerText.length < 5 || containerText.length > 900) return;
+
+    const lower = containerText.toLowerCase();
+
+    const looksLikeScreeningQuestion =
+      lower.includes("?") ||
+      lower.includes("eligible to work") ||
+      lower.includes("authorized") ||
+      lower.includes("authorization") ||
+      lower.includes("sponsorship") ||
+      lower.includes("sponsor") ||
+      lower.includes("visa") ||
+      lower.includes("salary") ||
+      lower.includes("compensation") ||
+      lower.includes("relocate") ||
+      lower.includes("relocation") ||
+      lower.includes("commute") ||
+      lower.includes("hybrid") ||
+      lower.includes("office") ||
+      lower.includes("remote") ||
+      lower.includes("experience") ||
+      lower.includes("years");
+
+    if (!looksLikeScreeningQuestion) return;
+
+    // Skip normal profile fields so screening answers never overwrite them.
+    if (isProtectedProfileFieldLabel(containerText)) {
+      return;
+    }
+
+    let input = container.querySelector(
       "textarea, input[type='text'], input[type='number'], select",
     );
 
-    if (!input) return;
+    let dropdownTrigger = container.querySelector(
+      "[role='combobox'], [aria-haspopup='listbox'], button, [role='button']",
+    );
 
-    const labelText = container.innerText.replace(/\s+/g, " ").trim();
+    // Avoid using file upload buttons as custom selects.
+    if (dropdownTrigger) {
+      const triggerText = (dropdownTrigger.innerText || "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
 
-    if (!labelText || labelText.length < 5 || labelText.length > 800) return;
+      const triggerLooksLikeUpload =
+        triggerText.includes("attach") ||
+        triggerText.includes("upload") ||
+        triggerText.includes("resume") ||
+        triggerText.includes("cv") ||
+        triggerText.includes("cover letter") ||
+        triggerText.includes("dropbox") ||
+        triggerText.includes("google drive");
 
-    const lower = labelText.toLowerCase();
+      if (triggerLooksLikeUpload) {
+        dropdownTrigger = null;
+      }
+    }
 
-    const looksLikeQuestion =
-      lower.includes("?") ||
-      lower.includes("authorized") ||
-      lower.includes("sponsor") ||
-      lower.includes("experience") ||
-      lower.includes("years") ||
-      lower.includes("salary") ||
-      lower.includes("relocate") ||
-      lower.includes("why") ||
-      lower.includes("describe") ||
-      lower.includes("gender") ||
-      lower.includes("veteran") ||
-      lower.includes("disability");
-
-    if (!looksLikeQuestion) return;
-
-    const fieldId = `greenhouse-field-${index}`;
-    input.setAttribute("data-autobidder-field-id", fieldId);
-
+    let fieldType = "";
+    let inputType = "";
     let options = [];
 
-    if (input.tagName.toLowerCase() === "select") {
-      options = Array.from(input.options)
-        .map((option, optionIndex) =>
-          makeOptionObject(
-            option.textContent.trim(),
-            option.value,
-            optionIndex,
-          ),
-        )
-        .filter((option) => option.label);
+    if (input) {
+      if (seenInputs.has(input)) return;
+      seenInputs.add(input);
+
+      if (isProtectedProfileFieldElement(input)) {
+        return;
+      }
+
+      const tag = input.tagName.toLowerCase();
+
+      fieldType = tag;
+      inputType = input.getAttribute("type") || "";
+
+      if (tag === "select") {
+        options = Array.from(input.options)
+          .map((option, optionIndex) =>
+            makeOptionObject(
+              option.textContent.trim(),
+              option.value,
+              optionIndex,
+            ),
+          )
+          .filter((option) => option.label);
+      }
+    } else if (dropdownTrigger) {
+      if (seenInputs.has(dropdownTrigger)) return;
+      seenInputs.add(dropdownTrigger);
+
+      input = dropdownTrigger;
+      fieldType = "custom_select";
+      inputType = "custom_select";
+      options = getGreenhouseDropdownOptionsFromContainer(container);
+    } else {
+      return;
     }
+
+    // If it is a normal text input but the container is really a profile field, skip.
+    if (input && isProtectedProfileFieldElement(input)) {
+      return;
+    }
+
+    const fieldId = `greenhouse-field-${fields.length}`;
+
+    input.setAttribute("data-autobidder-field-id", fieldId);
 
     fields.push({
       fieldId,
-      fieldType: input.tagName.toLowerCase(),
-      inputType: input.getAttribute("type") || "",
-      label: labelText,
+      fieldType,
+      inputType,
+      label: containerText,
       options,
     });
   });
 
-  return fields;
+  return dedupeScreeningFields(fields);
 }
 
 async function runAutobidderAutofillFromPanel() {
@@ -2604,7 +2793,7 @@ async function runAutobidderAutofillFromPanel() {
       "No screening answers found. Click Analyze Job first.";
 
     if (answers.length > 0) {
-      const fillResult = fillScreeningAnswers(answers);
+      const fillResult = await fillScreeningAnswers(answers);
 
       screeningMessage = `Screening answers filled: ${fillResult.filled.length}, skipped: ${fillResult.skipped.length}`;
 
@@ -3340,52 +3529,138 @@ function fillAshbyBasicFields(profile) {
   };
 }
 
+function getCleanLabelTextForField(field) {
+  const parts = [];
+
+  if (field.id) {
+    const label = document.querySelector(`label[for="${field.id}"]`);
+    if (label) {
+      parts.push(label.innerText);
+    }
+  }
+
+  const aria = field.getAttribute("aria-label");
+  if (aria) parts.push(aria);
+
+  const placeholder = field.getAttribute("placeholder");
+  if (placeholder) parts.push(placeholder);
+
+  const name = field.getAttribute("name");
+  if (name) parts.push(name);
+
+  const parentLabel = field.closest("label");
+  if (parentLabel) {
+    parts.push(parentLabel.innerText);
+  }
+
+  return parts.join(" ").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function findGreenhouseFieldByExactKeywords(keywords) {
+  const fields = Array.from(
+    document.querySelectorAll("input:not([type='hidden']), textarea"),
+  );
+
+  return fields.find((field) => {
+    const label = getCleanLabelTextForField(field);
+
+    if (!label) return false;
+
+    return keywords.some((keyword) => {
+      const key = keyword.toLowerCase();
+
+      return label === key || label.includes(key);
+    });
+  });
+}
+
+function findInputsByGreenhouseLabel(labelNames) {
+  const fields = Array.from(
+    document.querySelectorAll("input:not([type='hidden']), textarea"),
+  );
+
+  return fields.filter((field) => {
+    const label = normalizeAutobidderText(getFieldVisibleLabel(field));
+
+    if (!label) return false;
+
+    return labelNames.some((name) => {
+      const normalizedName = normalizeAutobidderText(name);
+
+      return label === normalizedName || label.startsWith(`${normalizedName} `);
+    });
+  });
+}
+
 function fillGreenhouseBasicFields(profile) {
   const mappings = [
     {
-      keys: ["first_name", "first name", "firstname"],
+      name: "First Name",
+      labels: ["first name"],
       value: profile.first_name,
     },
     {
-      keys: ["last_name", "last name", "lastname"],
+      name: "Last Name",
+      labels: ["last name"],
       value: profile.last_name,
     },
     {
-      keys: ["email", "email address"],
+      name: "Email",
+      labels: ["email", "email address"],
       value: profile.email,
     },
     {
-      keys: ["phone", "phone number", "mobile"],
+      name: "Phone",
+      labels: ["phone", "phone number"],
       value: profile.phone,
     },
     {
-      keys: ["linkedin", "linkedin profile"],
+      name: "Location",
+      labels: ["location city", "location", "city"],
+      value: profile.location,
+    },
+    {
+      name: "LinkedIn",
+      labels: ["linkedin profile", "linkedin"],
       value: profile.linkedin,
     },
     {
-      keys: ["github", "github profile"],
-      value: profile.github,
+      name: "Website",
+      labels: ["website", "portfolio", "personal website"],
+      value: profile.portfolio,
     },
     {
-      keys: ["website", "portfolio", "personal website"],
-      value: profile.portfolio,
+      name: "GitHub",
+      labels: ["github profile", "github"],
+      value: profile.github,
     },
   ];
 
   let filledCount = 0;
+  const filledFields = [];
 
   mappings.forEach((mapping) => {
-    const field = getInputByPossibleNames(mapping.keys);
+    if (!mapping.value) return;
 
-    if (field && mapping.value) {
-      setNativeValue(field, mapping.value);
-      filledCount += 1;
-    }
+    const matchedFields = findInputsByGreenhouseLabel(mapping.labels);
+
+    matchedFields.forEach((field) => {
+      const currentValue = String(field.value || "").trim();
+
+      // Fill empty fields, and also fix duplicated profile fields if needed.
+      if (!currentValue || currentValue === "None") {
+        setNativeValue(field, mapping.value);
+
+        filledCount += 1;
+        filledFields.push(mapping.name);
+      }
+    });
   });
 
   return {
     success: true,
     filledCount,
+    filledFields,
   };
 }
 
@@ -5030,4 +5305,245 @@ function bindCandidateEditEvents() {
       setEditCandidateStatus(`Save candidate error: ${error.message}`, "error");
     }
   });
+}
+
+function findGreenhouseContainerForField(fieldId) {
+  const field = document.querySelector(
+    `[data-autobidder-field-id="${fieldId}"]`,
+  );
+
+  if (!field) return null;
+
+  return field.closest(".field, .custom-question, .application-question, div");
+}
+
+function normalizeForOptionMatch(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function optionMatchesAnswer(optionText, answerText) {
+  const option = normalizeForOptionMatch(optionText);
+  const answer = normalizeForOptionMatch(answerText);
+
+  if (!option || !answer) return false;
+
+  if (option === answer) return true;
+  if (answer.includes(option)) return true;
+  if (option.includes(answer)) return true;
+
+  if (answer.startsWith("yes") && option.includes("yes")) return true;
+  if (answer.startsWith("no") && option.includes("no")) return true;
+
+  return false;
+}
+
+async function clickGreenhouseCustomSelectOption(answer) {
+  const trigger = document.querySelector(
+    `[data-autobidder-field-id="${answer.fieldId}"]`,
+  );
+
+  if (!trigger) {
+    return false;
+  }
+
+  const targetTexts = [
+    answer.selected_option_label,
+    answer.selected_option_value,
+    answer.answer,
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+
+  if (!targetTexts.length) {
+    return false;
+  }
+
+  trigger.scrollIntoView({
+    behavior: "smooth",
+    block: "center",
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 250));
+
+  trigger.click();
+
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
+  const visibleOptions = Array.from(
+    document.querySelectorAll("[role='option'], li, button, div"),
+  ).filter((node) => {
+    const rect = node.getBoundingClientRect();
+    const text = node.innerText?.replace(/\s+/g, " ").trim() || "";
+
+    if (!text) return false;
+    if (text.length > 120) return false;
+
+    return rect.width > 0 && rect.height > 0;
+  });
+
+  for (const targetText of targetTexts) {
+    const match = visibleOptions.find((node) => {
+      const optionText = node.innerText || "";
+      return optionMatchesAnswer(optionText, targetText);
+    });
+
+    if (match) {
+      match.click();
+
+      match.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      match.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      match.dispatchEvent(new Event("input", { bubbles: true }));
+      match.dispatchEvent(new Event("change", { bubbles: true }));
+
+      await new Promise((resolve) => setTimeout(resolve, 250));
+
+      return true;
+    }
+  }
+
+  // Close dropdown if no match
+  document.body.click();
+
+  return false;
+}
+
+function normalizeAutobidderText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isProtectedProfileFieldLabel(labelText) {
+  const label = normalizeAutobidderText(labelText);
+
+  if (!label) return false;
+
+  const protectedExactLabels = [
+    "first name",
+    "last name",
+    "preferred first name",
+    "email",
+    "email address",
+    "phone",
+    "phone number",
+    "country",
+    "location",
+    "location city",
+    "city",
+    "linkedin",
+    "linkedin profile",
+    "website",
+    "portfolio",
+    "github",
+    "github profile",
+    "resume",
+    "resume cv",
+    "cover letter",
+  ];
+
+  return protectedExactLabels.some((protectedLabel) => {
+    return label === protectedLabel || label.startsWith(`${protectedLabel} `);
+  });
+}
+
+function getFieldVisibleLabel(field) {
+  const parts = [];
+
+  if (!field) return "";
+
+  if (field.id) {
+    const label = document.querySelector(`label[for="${field.id}"]`);
+    if (label) parts.push(label.innerText);
+  }
+
+  const aria = field.getAttribute("aria-label");
+  if (aria) parts.push(aria);
+
+  const placeholder = field.getAttribute("placeholder");
+  if (placeholder) parts.push(placeholder);
+
+  const name = field.getAttribute("name");
+  if (name) parts.push(name);
+
+  const closestLabel = field.closest("label");
+  if (closestLabel) parts.push(closestLabel.innerText);
+
+  const smallContainer = field.closest(
+    ".field, .application-field, .input-wrapper, div",
+  );
+  if (smallContainer) {
+    const text = smallContainer.innerText || "";
+    if (text.length < 160) {
+      parts.push(text);
+    }
+  }
+
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+function isProtectedProfileFieldElement(field) {
+  const label = getFieldVisibleLabel(field);
+  return isProtectedProfileFieldLabel(label);
+}
+
+function getGreenhouseQuestionAnswerFallback(questionText, candidate) {
+  const q = String(questionText || "").toLowerCase();
+
+  if (
+    q.includes("eligible to work") ||
+    q.includes("authorized to work") ||
+    q.includes("work in the united states")
+  ) {
+    const auth = String(candidate?.work_authorization || "").toLowerCase();
+
+    if (
+      auth.includes("citizen") ||
+      auth.includes("green card") ||
+      auth.includes("permanent") ||
+      auth.includes("ead") ||
+      auth.includes("authorized")
+    ) {
+      return "Yes";
+    }
+  }
+
+  if (
+    q.includes("sponsorship") ||
+    q.includes("sponsor") ||
+    q.includes("visa")
+  ) {
+    const sponsorship = String(
+      candidate?.sponsorship_required || "",
+    ).toLowerCase();
+
+    if (sponsorship === "no" || sponsorship.includes("no")) {
+      return "No";
+    }
+
+    if (sponsorship === "yes" || sponsorship.includes("yes")) {
+      return "Yes";
+    }
+  }
+
+  if (
+    q.includes("relocate") ||
+    q.includes("commute") ||
+    q.includes("hybrid") ||
+    q.includes("office")
+  ) {
+    return "Yes";
+  }
+
+  if (q.includes("salary") || q.includes("compensation")) {
+    return candidate?.expected_salary || "";
+  }
+
+  return "";
 }

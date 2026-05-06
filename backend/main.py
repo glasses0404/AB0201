@@ -1181,6 +1181,32 @@ def pick_option_from_answer(field, answer_text: str):
 
     return None
 
+def fallback_answer_for_common_question(field, candidate):
+    question = (field.label or "").lower()
+
+    if "eligible to work" in question or "authorized to work" in question or "work in the united states" in question:
+        auth = (candidate.work_authorization or "").lower()
+
+        if "citizen" in auth or "green card" in auth or "permanent" in auth or "ead" in auth:
+            return "Yes"
+
+    if "sponsorship" in question or "sponsor" in question or "visa" in question:
+        sponsorship = (candidate.sponsorship_required or "").lower()
+
+        if sponsorship in ["no", "false", "not required"]:
+            return "No"
+
+        if sponsorship in ["yes", "true", "required"]:
+            return "Yes"
+
+    if "salary" in question or "compensation" in question:
+        return candidate.expected_salary or ""
+
+    if "relocate" in question or "hybrid" in question or "commute" in question:
+        return "Yes"
+
+    return ""
+
 @app.post("/screening/autofill-answers", response_model=ScreeningAutofillResponse)
 def generate_screening_autofill_answers(
     req: ScreeningAutofillRequest,
@@ -1239,17 +1265,18 @@ def generate_screening_autofill_answers(
                 "selected_option_value": selected_option.value if selected_option else None,
                 "selected_option_index": selected_option.index if selected_option else None,
                 "confidence": "High",
-                "manual_review_required": False if field.fieldType not in ["radio", "select", "checkbox"] or selected_option else True,
+                "manual_review_required": False if field.fieldType not in ["radio", "select", "checkbox", "custom_select"] or selected_option else True,
                 "reason": "Matched from saved candidate answer library."
             })
             continue
 
         answer_item = parsed_answers[index] if index < len(parsed_answers) else {}
 
-        answer_text = answer_item.get("answer", "")
+        fallback_answer = fallback_answer_for_common_question(field, candidate)
+        answer_text = fallback_answer or answer_item.get("answer", "")
         selected_option = pick_option_from_answer(field, answer_text)
 
-        is_choice_field = field.fieldType in ["radio", "select", "checkbox"]
+        is_choice_field = field.fieldType in ["radio", "select", "checkbox", "custom_select"]
 
         answers.append({
             "fieldId": field.fieldId,
@@ -1260,7 +1287,7 @@ def generate_screening_autofill_answers(
             "selected_option_value": selected_option.value if selected_option else answer_item.get("selected_option_value"),
             "selected_option_index": selected_option.index if selected_option else answer_item.get("selected_option_index"),
             "confidence": answer_item.get("confidence", "Low"),
-            "manual_review_required": True if is_choice_field and not selected_option else answer_item.get("manual_review_required", True),
+            "manual_review_required": True if is_choice_field and not selected_option else False if answer_text else answer_item.get("manual_review_required", True),
             "reason": answer_item.get("reason", "")
         })
 
