@@ -1,4 +1,7 @@
 const AUTOBIDDER_API_BASE_URL = "http://127.0.0.1:8000";
+const APPLY_PILOT_LOGO_URL = chrome.runtime.getURL(
+  "assets/applypilot-logo.png",
+);
 
 let autobidderDetectedJobPage = null;
 let autobidderFloatingPanel = null;
@@ -21,15 +24,15 @@ function createAutobidderFloatingPanel() {
 
   panel.innerHTML = `
     <div id="autobidder-panel-header">
-      <div id="autobidder-brand-area">
-        <div id="autobidder-logo-mark">A</div>
-        <div>
-          <div id="autobidder-brand-title">Autobidder</div>
-          <div id="autobidder-panel-subtitle">Job assistant</div>
+      <div id="autobidder-panel-brand">
+        <img id="autobidder-brand-logo" src="${APPLY_PILOT_LOGO_URL}" alt="ApplyPilot logo" />
+        <div id="autobidder-brand-text">
+          <div id="autobidder-brand-title">ApplyPilot</div>
+          <div id="autobidder-brand-subtitle">AI job application assistant</div>
         </div>
       </div>
 
-      <div id="autobidder-header-actions">
+      <div id="autobidder-panel-actions">
         <button id="autobidder-report-btn" title="Open report">⚑ Report</button>
         <button id="autobidder-settings-btn" title="Settings">⚙</button>
         <button id="autobidder-close-btn" title="Close">×</button>
@@ -455,16 +458,39 @@ function createAutobidderFloatingPanel() {
       gap: 8px;
     }
 
-    #autobidder-logo-mark {
-      width: 26px;
-      height: 26px;
-      border-radius: 8px;
-      background: #2563eb;
+    #autobidder-panel-brand {
       display: flex;
       align-items: center;
-      justify-content: center;
-      font-weight: bold;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    #autobidder-brand-logo {
+      width: 26px;
+      height: 26px;
+      object-fit: contain;
+      border-radius: 6px;
+      flex-shrink: 0;
+      background: transparent;
+    }
+
+    #autobidder-brand-text {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      line-height: 1.1;
+    }
+
+    #autobidder-brand-title {
+      font-size: 14px;
+      font-weight: 800;
       color: #ffffff;
+      letter-spacing: 0.1px;
+    }
+
+    #autobidder-brand-subtitle {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.82);
     }
 
     #autobidder-brand-title {
@@ -494,6 +520,42 @@ function createAutobidderFloatingPanel() {
       cursor: pointer;
       font-size: 12px;
       line-height: 1;
+    }
+    
+    #autobidder-panel-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    #autobidder-panel-actions button {
+      background: rgba(255, 255, 255, 0.08) !important;
+      border: 1px solid rgba(255, 255, 255, 0.18) !important;
+      color: #ffffff !important;
+      fill: #ffffff !important;
+      stroke: #ffffff !important;
+      border-radius: 8px;
+      height: 28px;
+      min-width: 28px;
+      padding: 0 10px;
+      font-size: 13px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      cursor: pointer;
+    }
+
+    #autobidder-panel-actions button:hover {
+      background: rgba(255, 255, 255, 0.16) !important;
+      color: #ffffff !important;
+    }
+
+    #autobidder-panel-actions button * {
+      color: #ffffff !important;
+      fill: #ffffff !important;
+      stroke: #ffffff !important;
     }
 
     #autobidder-report-btn {
