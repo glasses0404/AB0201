@@ -8,3 +8,7 @@ python-multipart
 gspread
 google-auth
 requests
+motor
+pymongo
+passlib[bcrypt]
+python-jose[cryptography]

@@ -35,6 +35,8 @@ from schemas import (
     MatchAnalyzeResponse
 )
 
+from cloud.routes import router as cloud_router
+
 from services.url_service import preserve_original_url, create_canonical_url
 from services.duplicate_service import check_duplicate
 from services.match_service import calculate_match_score
@@ -55,6 +57,7 @@ from services.slack_service import (
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Autobidder MVP API")
+app.include_router(cloud_router)
 
 app.add_middleware(
     CORSMiddleware,
