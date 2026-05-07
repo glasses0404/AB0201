@@ -183,6 +183,32 @@ def update_candidate_answer(
 
     return saved_answer
 
+@app.delete("/candidates/{candidate_id}")
+def delete_candidate(
+    candidate_id: int,
+    db: Session = Depends(get_db)
+):
+    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    # Optional safety: delete related applications/answers if your DB relationship
+    # does not cascade automatically.
+    db.query(Application).filter(Application.candidate_id == candidate_id).delete()
+
+    try:
+        db.query(CandidateAnswer).filter(CandidateAnswer.candidate_id == candidate_id).delete()
+    except Exception:
+        pass
+
+    db.delete(candidate)
+    db.commit()
+
+    return {
+        "success": True,
+        "message": f"Candidate #{candidate_id} deleted."
+    }
 
 @app.delete("/candidate-answers/{answer_id}")
 def delete_candidate_answer(

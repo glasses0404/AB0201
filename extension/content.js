@@ -13,6 +13,7 @@ let autobidderActiveSettingsTab = "candidate";
 let autobidderCandidatesCache = [];
 let autobidderEditingAnswerId = null;
 let autobidderCandidateAnswersCache = [];
+let autobidderCandidateFormMode = "edit"; // edit | create
 
 function createAutobidderFloatingPanel() {
   if (document.getElementById("autobidder-floating-panel")) {
@@ -152,11 +153,16 @@ function createAutobidderFloatingPanel() {
                 No candidate selected.
               </div>
 
-              <button id="autobidder-set-active-candidate-btn">Set Active Candidate</button>
+              <div class="autobidder-button-row">
+                <button id="autobidder-set-active-candidate-btn">Set Active</button>
+                <button id="autobidder-new-candidate-btn" class="autobidder-secondary-btn">New Candidate</button>
+              </div>
             </div>
 
             <div class="autobidder-card">
-              <div class="autobidder-section-title">Edit Candidate Information</div>
+              <div class="autobidder-section-title" id="autobidder-candidate-form-title">
+                Edit Candidate Information
+              </div>
 
               <div class="autobidder-two-col">
                 <div>
@@ -204,10 +210,13 @@ function createAutobidderFloatingPanel() {
               <label class="autobidder-label">Resume Text</label>
               <textarea id="autobidder-edit-resume-text" class="autobidder-input autobidder-textarea-large" placeholder="Candidate resume text"></textarea>
 
-              <button id="autobidder-save-candidate-changes-btn">Save Candidate Changes</button>
+              <div class="autobidder-button-row">
+                <button id="autobidder-save-candidate-changes-btn">Save Candidate</button>
+                <button id="autobidder-delete-candidate-btn" class="autobidder-delete-btn">Delete Candidate</button>
+              </div>
 
               <div id="autobidder-edit-candidate-status" class="autobidder-mini-preview">
-                Select a candidate to edit.
+                Select a candidate to edit, or click New Candidate.
               </div>
             </div>
           </div>
@@ -1141,6 +1150,13 @@ function createAutobidderFloatingPanel() {
       object-fit: contain;
       display: block;
     }
+    .autobidder-delete-btn {
+      background: #dc2626 !important;
+    }
+
+    .autobidder-delete-btn:hover {
+      background: #b91c1c !important;
+    }
   `;
 
   document.documentElement.appendChild(style);
@@ -1396,7 +1412,7 @@ async function copyLatestCoverLetterFromPanel() {
       chrome.storage.local.get(["latestOnPageApplicationDraft"], resolve);
     });
 
-    const draft = storageData.latestOnPageApplicationDraft;
+    let draft = storageData.latestOnPageApplicationDraft;
 
     if (!draft || !draft.cover_letter) {
       if (resultBox) {
@@ -2140,7 +2156,6 @@ async function runAutobidderPageAnalysis() {
     } catch (error) {
       existingApplication = null;
     }
-
     let applicationDraft;
 
     if (existingApplication && existingApplication.id) {
@@ -2160,8 +2175,6 @@ async function runAutobidderPageAnalysis() {
 
       addPanelLog("Application draft created", "success");
     }
-
-    addPanelLog("Application draft created", "success");
 
     setPanelStep("Preparing screening answers...");
 
@@ -2805,9 +2818,39 @@ async function runAutobidderAutofillFromPanel() {
     addPanelLog(`Active candidate found: #${active.candidateId}`, "success");
 
     setPanelStep("Loading candidate profile...");
-    const candidate = await getJson(
-      `${AUTOBIDDER_API_BASE_URL}/candidates/${active.candidateId}`,
-    );
+    let candidate = null;
+
+    try {
+      candidate = await getJson(
+        `${AUTOBIDDER_API_BASE_URL}/candidates/${active.candidateId}`,
+      );
+    } catch (error) {
+      if (String(error.message || "").includes("Candidate not found")) {
+        await chrome.storage.local.remove(["activeCandidateId"]);
+
+        addPanelLog(
+          "Active candidate was not found. Please select or create a candidate in Settings → Candidate.",
+          "error",
+        );
+
+        resultBox.innerText = `
+Candidate not found.
+
+The selected active candidate no longer exists in the backend database.
+
+Please:
+1. Open Settings
+2. Go to Candidate
+3. Select an existing candidate or create a new one
+4. Click Set Active
+`.trim();
+
+        failPanelProgress("Candidate not found.");
+        return;
+      }
+
+      throw error;
+    }
 
     addPanelLog("Candidate profile loaded", "success");
 
@@ -3767,7 +3810,7 @@ async function runAutobidderMarkSubmittedAndSync() {
       chrome.storage.local.get(["latestOnPageApplicationDraft"], resolve);
     });
 
-    const draft = storageData.latestOnPageApplicationDraft;
+    let draft = storageData.latestOnPageApplicationDraft;
 
     if (!draft || !draft.id) {
       failPanelProgress("No application draft found.");
@@ -3777,6 +3820,40 @@ async function runAutobidderMarkSubmittedAndSync() {
     }
 
     addPanelLog(`Application found: #${draft.id}`, "success");
+
+    let latestApplication = null;
+
+    try {
+      latestApplication = await getJson(
+        `${AUTOBIDDER_API_BASE_URL}/applications/${draft.id}`,
+      );
+    } catch (error) {
+      if (String(error.message || "").includes("Application not found")) {
+        await chrome.storage.local.remove([
+          "latestOnPageApplicationDraft",
+          "latestOnPageScreeningAnswers",
+          "latestOnPageScreeningFields",
+        ]);
+
+        failPanelProgress("Application not found.");
+
+        resultBox.innerText = `
+Application not found.
+
+The saved application draft #${draft.id} no longer exists in the backend database.
+
+Please click Analyze Job again to create a fresh application draft, then try Mark Submitted again.
+`.trim();
+
+        return;
+      }
+
+      throw error;
+    }
+
+    draft = latestApplication;
+
+    addPanelLog(`Verified latest application: #${draft.id}`, "success");
 
     setPanelStep("Updating application status...");
 
@@ -3815,7 +3892,7 @@ async function runAutobidderMarkSubmittedAndSync() {
       addPanelLog("Google Sheets sync skipped by preference.", "warning");
     }
 
-    chrome.storage.local.set({
+    await chrome.storage.local.set({
       latestOnPageApplicationDraft: updatedApplication,
     });
 
@@ -4228,12 +4305,20 @@ async function loadCandidatesIntoSettings() {
       select.dataset.bound = "true";
       select.addEventListener("change", () => {
         const candidateId = Number(select.value);
+
+        if (!candidateId) {
+          renderSettingsCandidatePreview(null);
+          setCandidateFormMode("create");
+          return;
+        }
+
         renderSettingsCandidatePreview(candidateId);
 
         const candidate = autobidderCandidatesCache.find(
           (item) => Number(item.id) === Number(candidateId),
         );
 
+        setCandidateFormMode("edit");
         fillCandidateEditForm(candidate);
       });
     }
@@ -4322,13 +4407,9 @@ function bindCandidateSettingsEvents() {
     "autobidder-set-active-candidate-btn",
   );
 
-  if (!setActiveBtn) {
-    bindCandidateEditEvents();
-    return;
-  }
+  bindCandidateEditEvents();
 
-  if (setActiveBtn.dataset.bound) {
-    bindCandidateEditEvents();
+  if (!setActiveBtn || setActiveBtn.dataset.bound) {
     return;
   }
 
@@ -4376,14 +4457,11 @@ function bindCandidateSettingsEvents() {
     }
 
     await renderActiveProfileSummary();
-
-    autobidderAutoAnalysisStarted = false;
-
     await renderResumeSettings();
     await loadSavedAnswersSettings();
-  });
 
-  bindCandidateEditEvents();
+    autobidderAutoAnalysisStarted = false;
+  });
 }
 
 function arrayBufferToBase64(buffer) {
@@ -5296,7 +5374,10 @@ function fillCandidateEditForm(candidate) {
   if (candidate) {
     setEditCandidateStatus(`Editing candidate #${candidate.id}.`, "info");
   } else {
-    setEditCandidateStatus("Select a candidate to edit.", "warning");
+    setEditCandidateStatus(
+      "Enter candidate information and click Create Candidate.",
+      "info",
+    );
   }
 }
 
@@ -5330,72 +5411,39 @@ async function updateCandidateFromPanel(candidateId, payload) {
   );
 }
 
-function bindCandidateEditEvents() {
-  const saveBtn = document.getElementById(
-    "autobidder-save-candidate-changes-btn",
-  );
+function fillCandidateEditForm(candidate) {
+  const fields = {
+    "autobidder-edit-first-name": candidate?.first_name || "",
+    "autobidder-edit-last-name": candidate?.last_name || "",
+    "autobidder-edit-email": candidate?.email || "",
+    "autobidder-edit-phone": candidate?.phone || "",
+    "autobidder-edit-location": candidate?.location || "",
+    "autobidder-edit-linkedin": candidate?.linkedin || "",
+    "autobidder-edit-github": candidate?.github || "",
+    "autobidder-edit-portfolio": candidate?.portfolio || "",
+    "autobidder-edit-work-authorization": candidate?.work_authorization || "",
+    "autobidder-edit-sponsorship-required":
+      candidate?.sponsorship_required || "",
+    "autobidder-edit-expected-salary": candidate?.expected_salary || "",
+    "autobidder-edit-resume-text": candidate?.resume_text || "",
+  };
 
-  if (!saveBtn || saveBtn.dataset.bound) return;
+  Object.entries(fields).forEach(([id, value]) => {
+    const el = document.getElementById(id);
 
-  saveBtn.dataset.bound = "true";
-
-  saveBtn.addEventListener("click", async () => {
-    try {
-      const candidate = getSelectedCandidateFromSettings();
-
-      if (!candidate) {
-        setEditCandidateStatus("Please select a candidate first.", "error");
-        return;
-      }
-
-      const payload = buildCandidateUpdatePayloadFromPanel();
-
-      if (!payload.first_name || !payload.last_name) {
-        setEditCandidateStatus(
-          "First name and last name are required.",
-          "error",
-        );
-        return;
-      }
-
-      setEditCandidateStatus("Saving candidate changes...", "warning");
-
-      const updatedCandidate = await updateCandidateFromPanel(
-        candidate.id,
-        payload,
-      );
-
-      const index = autobidderCandidatesCache.findIndex(
-        (item) => Number(item.id) === Number(updatedCandidate.id),
-      );
-
-      if (index !== -1) {
-        autobidderCandidatesCache[index] = updatedCandidate;
-      }
-
-      renderCandidateSelectOptions(autobidderCandidatesCache);
-
-      const select = document.getElementById(
-        "autobidder-settings-candidate-select",
-      );
-
-      if (select) {
-        select.value = String(updatedCandidate.id);
-      }
-
-      renderSettingsCandidatePreview(updatedCandidate.id);
-      fillCandidateEditForm(updatedCandidate);
-
-      await renderActiveProfileSummary();
-
-      setEditCandidateStatus(
-        `Candidate #${updatedCandidate.id} updated successfully.`,
-        "success",
-      );
-    } catch (error) {
-      setEditCandidateStatus(`Save candidate error: ${error.message}`, "error");
+    if (el) {
+      el.value = value;
     }
   });
+
+  if (candidate) {
+    setEditCandidateStatus(`Editing candidate #${candidate.id}.`, "info");
+  } else {
+    setEditCandidateStatus(
+      "Enter candidate information and click Create Candidate.",
+      "info",
+    );
+  }
 }
 
 function findGreenhouseContainerForField(fieldId) {
@@ -5724,3 +5772,215 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   return false;
 });
+
+function setCandidateFormMode(mode) {
+  autobidderCandidateFormMode = mode;
+
+  const title = document.getElementById("autobidder-candidate-form-title");
+  const saveBtn = document.getElementById(
+    "autobidder-save-candidate-changes-btn",
+  );
+  const deleteBtn = document.getElementById("autobidder-delete-candidate-btn");
+
+  if (mode === "create") {
+    if (title) title.innerText = "Create New Candidate";
+    if (saveBtn) saveBtn.innerText = "Create Candidate";
+    if (deleteBtn) deleteBtn.disabled = true;
+
+    fillCandidateEditForm(null);
+    setEditCandidateStatus("Creating a new candidate.", "info");
+  } else {
+    if (title) title.innerText = "Edit Candidate Information";
+    if (saveBtn) saveBtn.innerText = "Save Candidate";
+    if (deleteBtn) deleteBtn.disabled = false;
+  }
+}
+
+async function createCandidateFromPanel(payload) {
+  return await postJson(`${AUTOBIDDER_API_BASE_URL}/candidates`, payload);
+}
+
+async function deleteCandidateFromPanel(candidateId) {
+  return await deleteJson(
+    `${AUTOBIDDER_API_BASE_URL}/candidates/${candidateId}`,
+  );
+}
+
+function bindCandidateEditEvents() {
+  const saveBtn = document.getElementById(
+    "autobidder-save-candidate-changes-btn",
+  );
+  const deleteBtn = document.getElementById("autobidder-delete-candidate-btn");
+  const newBtn = document.getElementById("autobidder-new-candidate-btn");
+
+  if (newBtn && !newBtn.dataset.bound) {
+    newBtn.dataset.bound = "true";
+
+    newBtn.addEventListener("click", () => {
+      const select = document.getElementById(
+        "autobidder-settings-candidate-select",
+      );
+
+      if (select) {
+        select.value = "";
+      }
+
+      renderSettingsCandidatePreview(null);
+      setCandidateFormMode("create");
+    });
+  }
+
+  if (saveBtn && !saveBtn.dataset.bound) {
+    saveBtn.dataset.bound = "true";
+
+    saveBtn.addEventListener("click", async () => {
+      try {
+        const payload = buildCandidateUpdatePayloadFromPanel();
+
+        if (!payload.first_name || !payload.last_name) {
+          setEditCandidateStatus(
+            "First name and last name are required.",
+            "error",
+          );
+          return;
+        }
+
+        let savedCandidate = null;
+
+        if (autobidderCandidateFormMode === "create") {
+          setEditCandidateStatus("Creating candidate...", "warning");
+
+          savedCandidate = await createCandidateFromPanel(payload);
+
+          setEditCandidateStatus(
+            `Candidate #${savedCandidate.id} created successfully.`,
+            "success",
+          );
+        } else {
+          const candidate = getSelectedCandidateFromSettings();
+
+          if (!candidate) {
+            setEditCandidateStatus(
+              "Please select a candidate first, or click New Candidate.",
+              "error",
+            );
+            return;
+          }
+
+          setEditCandidateStatus("Saving candidate changes...", "warning");
+
+          savedCandidate = await updateCandidateFromPanel(
+            candidate.id,
+            payload,
+          );
+
+          setEditCandidateStatus(
+            `Candidate #${savedCandidate.id} updated successfully.`,
+            "success",
+          );
+        }
+
+        await loadCandidatesIntoSettings();
+
+        const select = document.getElementById(
+          "autobidder-settings-candidate-select",
+        );
+
+        if (select && savedCandidate?.id) {
+          select.value = String(savedCandidate.id);
+        }
+
+        renderSettingsCandidatePreview(savedCandidate.id);
+        fillCandidateEditForm(savedCandidate);
+        setCandidateFormMode("edit");
+
+        await chrome.storage.local.set({
+          activeCandidateId: savedCandidate.id,
+        });
+
+        await renderActiveProfileSummary();
+        await renderResumeSettings();
+        await loadSavedAnswersSettings();
+      } catch (error) {
+        setEditCandidateStatus(
+          `Save candidate error: ${error.message}`,
+          "error",
+        );
+      }
+    });
+  }
+
+  if (deleteBtn && !deleteBtn.dataset.bound) {
+    deleteBtn.dataset.bound = "true";
+
+    deleteBtn.addEventListener("click", async () => {
+      try {
+        const candidate = getSelectedCandidateFromSettings();
+
+        if (!candidate) {
+          setEditCandidateStatus(
+            "Please select a candidate to delete.",
+            "error",
+          );
+          return;
+        }
+
+        const name =
+          `${candidate.first_name || ""} ${candidate.last_name || ""}`.trim();
+
+        const confirmed = confirm(
+          `Delete candidate #${candidate.id}${name ? ` (${name})` : ""}?\n\nThis may also delete related applications and saved answers.`,
+        );
+
+        if (!confirmed) {
+          return;
+        }
+
+        setEditCandidateStatus(
+          `Deleting candidate #${candidate.id}...`,
+          "warning",
+        );
+
+        await deleteCandidateFromPanel(candidate.id);
+
+        const active = await getActiveCandidateFromStorage();
+
+        if (active && Number(active.candidateId) === Number(candidate.id)) {
+          await chrome.storage.local.remove(["activeCandidateId"]);
+        }
+
+        autobidderCandidatesCache = autobidderCandidatesCache.filter(
+          (item) => Number(item.id) !== Number(candidate.id),
+        );
+
+        renderCandidateSelectOptions(autobidderCandidatesCache);
+
+        const select = document.getElementById(
+          "autobidder-settings-candidate-select",
+        );
+
+        if (select) {
+          select.value = "";
+        }
+
+        renderSettingsCandidatePreview(null);
+        fillCandidateEditForm(null);
+        setCandidateFormMode("create");
+
+        await renderActiveProfileSummary();
+        await renderResumeSettings();
+        await loadSavedAnswersSettings();
+
+        setEditCandidateStatus(
+          `Candidate #${candidate.id} deleted.`,
+          "success",
+        );
+      } catch (error) {
+        setEditCandidateStatus(
+          `Delete candidate error: ${error.message}`,
+          "error",
+        );
+      }
+    });
+  }
+}
